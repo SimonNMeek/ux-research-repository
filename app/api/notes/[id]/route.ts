@@ -12,8 +12,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       return new Response(JSON.stringify({ error: 'Invalid id' }), { status: 400 });
     }
     const db = getDb();
-    const note = db.prepare('SELECT id, filename, content FROM notes WHERE id = ?').get(id) as
-      | { id: number; filename: string; content: string }
+    const note = db.prepare('SELECT id, filename, content, is_favorite FROM notes WHERE id = ?').get(id) as
+      | { id: number; filename: string; content: string; is_favorite: number }
       | undefined;
     if (!note) {
       return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
@@ -26,7 +26,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       )
       .all(id) as Array<{ tag: string }>;
     return new Response(
-      JSON.stringify({ id: note.id, filename: note.filename, content: note.content, tags: tags.map((t) => t.tag) }),
+      JSON.stringify({ 
+        id: note.id, 
+        filename: note.filename, 
+        content: note.content, 
+        tags: tags.map((t) => t.tag),
+        is_favorite: Boolean(note.is_favorite)
+      }),
       { status: 200, headers: { 'content-type': 'application/json' } }
     );
   } catch (err: any) {

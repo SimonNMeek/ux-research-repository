@@ -3,10 +3,11 @@ import { getDb } from '../../../../../../db/index';
 
 export const runtime = 'nodejs';
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string; tag: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string; tag: string }> }) {
   try {
-    const id = Number(params.id);
-    const tag = decodeURIComponent(params.tag).trim();
+    const { id: idStr, tag: tagStr } = await params;
+    const id = Number(idStr);
+    const tag = decodeURIComponent(tagStr).trim();
     if (!Number.isFinite(id) || !tag) {
       return new Response(JSON.stringify({ error: 'Invalid parameters' }), { status: 400 });
     }

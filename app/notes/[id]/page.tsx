@@ -74,7 +74,13 @@ export default async function NotePage({ params }: { params: { id: string } }) {
       <h1 style={{ marginTop: 12 }}>{note.filename}</h1>
       <TagEditor noteId={note.id} tags={note.tags} />
       <article style={{ lineHeight: 1.6 }}>
-        {isMd ? <ReactMarkdown>{note.content}</ReactMarkdown> : <pre style={{ whiteSpace: 'pre-wrap' }}>{note.content}</pre>}
+        {isMd ? (
+          <div style={{ lineHeight: 1.6 }}>
+            <ReactMarkdown>{note.content}</ReactMarkdown>
+          </div>
+        ) : (
+          <pre style={{ whiteSpace: 'pre-wrap' }}>{note.content}</pre>
+        )}
       </article>
     </div>
   );
