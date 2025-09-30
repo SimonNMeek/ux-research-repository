@@ -6,11 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useSunBackground } from '@/hooks/useSunBackground';
 
   type Result = { id: number; filename: string; snippet?: string; tags: string[]; is_favorite: boolean; created_at: string };
 type Note = { id: number; filename: string; content: string; tags: string[]; is_favorite: boolean };
 
 export default function Home() {
+  const backgroundColors = useSunBackground();
   const [dragActive, setDragActive] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [tagsInput, setTagsInput] = useState('');
@@ -107,8 +109,31 @@ export default function Home() {
   }, [query, tagFilter, runSearch]);
 
   useEffect(() => {
-    fetch('/api/tags').then((r) => r.json()).then((j) => setAllTags(j.tags || [])).catch(() => {});
-  }, []);
+    const loadInitialData = async () => {
+      // Load tags
+      try {
+        const tagsRes = await fetch('/api/tags');
+        const tagsJson = await tagsRes.json();
+        setAllTags(tagsJson.tags || []);
+      } catch (error) {
+        console.error('Failed to load tags:', error);
+      }
+      
+      // Load files
+      try {
+        setLoading(true);
+        const res = await fetch('/api/notes');
+        const json = await res.json();
+        setResults(json.results || []);
+        setLoading(false);
+      } catch (error) {
+        console.error('Failed to load files:', error);
+        setLoading(false);
+      }
+    };
+    
+    loadInitialData();
+  }, []); // Empty dependency array - only run on mount
 
   useEffect(() => {
     const v = tagFilter.trim().toLowerCase();
@@ -283,7 +308,7 @@ export default function Home() {
   }, [files]);
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className={`min-h-screen ${backgroundColors.primary} bg-gradient-to-b ${backgroundColors.gradient}`}>
       <div className="max-w-4xl mx-auto p-6">
       <h1 className="text-3xl font-bold mb-6">Sol Research</h1>
       <div
@@ -381,28 +406,28 @@ export default function Home() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
             <Input
-              placeholder="Search filename/content"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search filename/content"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
               className="flex-1 bg-white pl-10"
             />
           </div>
           <div className="relative flex-1">
             <Tag className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
             <Input
-              placeholder="Filter by tag"
-              value={tagFilter}
-              onChange={(e) => setTagFilter(e.target.value)}
+            placeholder="Filter by tag"
+            value={tagFilter}
+            onChange={(e) => setTagFilter(e.target.value)}
               className="w-full bg-white pl-10"
-            />
-            {tagSuggestions.length > 0 && (
+          />
+          {tagSuggestions.length > 0 && (
               <div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded overflow-hidden shadow-lg z-50 mt-1">
-                {tagSuggestions.map((t) => (
+              {tagSuggestions.map((t) => (
                   <div key={t} className="px-2 py-1 cursor-pointer hover:bg-gray-100" onClick={() => setTagFilter(t)}>{t}</div>
-                ))}
-              </div>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
+        </div>
           <div className="relative" ref={sortDropdownRef}>
             <Button
               variant="outline"
@@ -447,7 +472,7 @@ export default function Home() {
               </div>
             )}
           </div>
-        </div>
+      </div>
 
       <div className="mt-4">
         {loading ? <p className="text-gray-600">Loading…</p> : null}
@@ -457,21 +482,21 @@ export default function Home() {
             <div key={r.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
               <div className="mb-3">
                 <div className="flex items-start justify-between gap-2 mb-2">
-                  <button
-                    onClick={async () => {
-                      setPreview({ open: true, note: null, loading: true });
-                      try {
-                        const res = await fetch(`/api/notes/${r.id}`, { cache: 'no-store' });
-                        const note = await res.json();
-                        setPreview({ open: true, note, loading: false });
-                      } catch {
-                        setPreview({ open: true, note: null, loading: false });
-                      }
-                    }}
+              <button
+                onClick={async () => {
+                  setPreview({ open: true, note: null, loading: true });
+                  try {
+                    const res = await fetch(`/api/notes/${r.id}`, { cache: 'no-store' });
+                    const note = await res.json();
+                    setPreview({ open: true, note, loading: false });
+                  } catch {
+                    setPreview({ open: true, note: null, loading: false });
+                  }
+                }}
                     className="font-semibold text-blue-600 hover:text-blue-700 text-left flex-1 min-w-0 break-words leading-tight"
-                  >
+              >
                     {cleanFilename(r.filename)}
-                  </button>
+              </button>
                   <div className="flex gap-1 flex-shrink-0">
                   <Button
                     variant="ghost"
@@ -496,19 +521,19 @@ export default function Home() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    aria-label="Delete note"
-                    title="Delete"
-                    onClick={async () => {
-                      if (!confirm('Delete this note?')) return;
-                      const res = await fetch(`/api/notes/${r.id}`, { method: 'DELETE' });
-                      if (res.ok) {
-                        runSearch();
-                        if (preview.open && preview.note?.id === r.id) setPreview({ open: false, note: null, loading: false });
-                      } else {
-                        const err = await res.json().catch(() => ({}));
-                        alert(err?.error || 'Delete failed');
-                      }
-                    }}
+                  aria-label="Delete note"
+                  title="Delete"
+                  onClick={async () => {
+                    if (!confirm('Delete this note?')) return;
+                    const res = await fetch(`/api/notes/${r.id}`, { method: 'DELETE' });
+                    if (res.ok) {
+                      runSearch();
+                      if (preview.open && preview.note?.id === r.id) setPreview({ open: false, note: null, loading: false });
+                    } else {
+                      const err = await res.json().catch(() => ({}));
+                      alert(err?.error || 'Delete failed');
+                    }
+                  }}
                     className="h-6 w-6 p-0 text-gray-400 hover:text-gray-600"
                   >
                     <Trash2 size={16} />
@@ -551,8 +576,8 @@ export default function Home() {
           </DialogHeader>
           <div className="mt-4">
             {preview.loading && <p className="text-gray-600">Loading…</p>}
-            {!preview.loading && preview.note && (
-              preview.note.filename.endsWith('.md') ? (
+              {!preview.loading && preview.note && (
+                preview.note.filename.endsWith('.md') ? (
                 <div className="prose max-w-none">
                   <ReactMarkdown>{preview.note.content}</ReactMarkdown>
                 </div>
@@ -683,7 +708,7 @@ export default function Home() {
           </div>
         </DialogContent>
       </Dialog>
-      </div>
+        </div>
     </div>
   );
 }

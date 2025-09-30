@@ -4,6 +4,19 @@ module.exports = {
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./hooks/**/*.{js,ts,jsx,tsx,mdx}",
+  ],
+  safelist: [
+    // Sun background colors
+    'bg-slate-50', 'bg-slate-100', 'bg-slate-800', 'bg-slate-900',
+    'bg-orange-200', 'bg-orange-300', 'bg-orange-400', 'bg-orange-500',
+    'bg-pink-200', 'bg-pink-400',
+    'bg-red-200', 'bg-red-400', 'bg-red-500', 'bg-red-600',
+    'bg-blue-200', 'bg-blue-300', 'bg-blue-400', 'bg-blue-500', 'bg-blue-600',
+    'from-slate-50', 'to-slate-100', 'from-slate-900', 'via-slate-800', 'to-slate-900',
+    'from-orange-200', 'via-pink-200', 'to-orange-300', 'from-orange-400', 'via-pink-400', 'to-orange-500',
+    'from-red-500', 'via-red-400', 'to-red-600', 'from-red-200', 'via-red-200', 'to-orange-300',
+    'from-blue-500', 'via-blue-400', 'to-blue-600', 'from-blue-300', 'via-blue-200', 'to-blue-400',
   ],
   theme: {
     extend: {
