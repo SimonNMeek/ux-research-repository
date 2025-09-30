@@ -5,8 +5,12 @@ CREATE TABLE IF NOT EXISTS notes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   filename TEXT NOT NULL,
   content TEXT NOT NULL,
+  original_text TEXT,
+  clean_text TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  is_favorite BOOLEAN DEFAULT 0
+  is_favorite BOOLEAN DEFAULT 0,
+  anonymization_profile_id TEXT,
+  clean_version INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS tags (
@@ -44,6 +48,35 @@ CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
   INSERT INTO notes_fts(rowid, filename, content)
   VALUES (new.id, new.filename, new.content);
 END;
+
+-- Anonymization tables
+CREATE TABLE IF NOT EXISTS anonymization_profiles (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  config TEXT NOT NULL, -- JSON config
+  created_by TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS pseudonyms (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  pii_hash TEXT NOT NULL UNIQUE,
+  type TEXT NOT NULL,
+  label TEXT NOT NULL,
+  first_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS anonymization_audit (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  document_id INTEGER NOT NULL,
+  profile_id TEXT NOT NULL,
+  detector_version TEXT NOT NULL,
+  summary TEXT NOT NULL, -- JSON summary
+  duration_ms INTEGER NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (document_id) REFERENCES notes(id) ON DELETE CASCADE,
+  FOREIGN KEY (profile_id) REFERENCES anonymization_profiles(id) ON DELETE CASCADE
+);
 
 
 

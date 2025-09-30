@@ -1,11 +1,16 @@
 import { NextRequest } from 'next/server';
 export const runtime = 'nodejs';
 import { getDb } from '../../../db/index';
+import { AnonymizationPipeline } from '@sol/anonymizer';
+import { ConfigLoader } from '@sol/anonymizer';
+import { v4 as uuidv4 } from 'uuid';
 
 type CreateBody = {
   filename: string;
   content: string;
   tags?: string[];
+  anonymize?: boolean;
+  anonymizationConfig?: any;
 };
 
 export async function POST(req: NextRequest) {
@@ -23,6 +28,17 @@ export async function POST(req: NextRequest) {
         .split(',')
         .map((t) => t.trim())
         .filter(Boolean);
+      const anonymize = form.get('anonymize') === 'true';
+      const anonymizationConfigStr = (form.get('anonymizationConfig') as string) || '';
+      let anonymizationConfig = null;
+      if (anonymizationConfigStr) {
+        try {
+          anonymizationConfig = JSON.parse(anonymizationConfigStr);
+        } catch (e) {
+          // Use default config if parsing fails
+          anonymizationConfig = ConfigLoader.createDefaultConfig();
+        }
+      }
 
       if (files.length === 0) {
         return new Response(JSON.stringify({ error: 'Missing files' }), { status: 400 });
@@ -52,11 +68,46 @@ export async function POST(req: NextRequest) {
         }
 
         const db = getDb();
+        
+        let finalContent = content;
+        let originalText = null;
+        let cleanText = null;
+        let anonymizationProfileId = null;
+        let cleanVersion = 0;
+        
+        // Apply anonymization if requested
+        let anonymizationResult = null;
+        if (anonymize && anonymizationConfig) {
+          const pipeline = new AnonymizationPipeline(anonymizationConfig);
+          anonymizationResult = await pipeline.anonymizeText(content);
+          
+          finalContent = anonymizationResult.anonymizedText;
+          originalText = content;
+          cleanText = anonymizationResult.anonymizedText;
+          cleanVersion = 1;
+          
+          // Store anonymization profile
+          const profileId = uuidv4();
+          const insertProfile = db.prepare(
+            'INSERT INTO anonymization_profiles (id, name, config, created_by) VALUES (?, ?, ?, ?)'
+          );
+          insertProfile.run(profileId, 'Upload Profile', JSON.stringify(anonymizationConfig), 'system');
+          anonymizationProfileId = profileId;
+        }
+        
         const insertNote = db.prepare(
-          'INSERT INTO notes (filename, content) VALUES (?, ?)' 
+          'INSERT INTO notes (filename, content, original_text, clean_text, anonymization_profile_id, clean_version) VALUES (?, ?, ?, ?, ?, ?)' 
         );
-        const info = insertNote.run(filename, content);
+        const info = insertNote.run(filename, finalContent, originalText, cleanText, anonymizationProfileId, cleanVersion);
         const noteId = Number(info.lastInsertRowid);
+        
+        // Store audit record if anonymization was applied
+        if (anonymize && anonymizationConfig && anonymizationProfileId && anonymizationResult) {
+          const insertAudit = db.prepare(
+            'INSERT INTO anonymization_audit (document_id, profile_id, detector_version, summary, duration_ms) VALUES (?, ?, ?, ?, ?)'
+          );
+          insertAudit.run(noteId, anonymizationProfileId, '1.0.0', JSON.stringify(anonymizationResult.summary), anonymizationResult.duration);
+        }
 
         if (tags && tags.length > 0) {
           const upsertTag = db.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)');
@@ -94,11 +145,46 @@ export async function POST(req: NextRequest) {
       }
 
       const db = getDb();
+      
+      let finalContent = body.content;
+      let originalText = null;
+      let cleanText = null;
+      let anonymizationProfileId = null;
+      let cleanVersion = 0;
+      
+      // Apply anonymization if requested
+      let anonymizationResult = null;
+      if (body.anonymize && body.anonymizationConfig) {
+        const pipeline = new AnonymizationPipeline(body.anonymizationConfig);
+        anonymizationResult = await pipeline.anonymizeText(body.content);
+        
+        finalContent = anonymizationResult.anonymizedText;
+        originalText = body.content;
+        cleanText = anonymizationResult.anonymizedText;
+        cleanVersion = 1;
+        
+        // Store anonymization profile
+        const profileId = uuidv4();
+        const insertProfile = db.prepare(
+          'INSERT INTO anonymization_profiles (id, name, config, created_by) VALUES (?, ?, ?, ?)'
+        );
+        insertProfile.run(profileId, 'Upload Profile', JSON.stringify(body.anonymizationConfig), 'system');
+        anonymizationProfileId = profileId;
+      }
+      
       const insertNote = db.prepare(
-        'INSERT INTO notes (filename, content) VALUES (?, ?)' 
+        'INSERT INTO notes (filename, content, original_text, clean_text, anonymization_profile_id, clean_version) VALUES (?, ?, ?, ?, ?, ?)' 
       );
-      const info = insertNote.run(body.filename, body.content);
+      const info = insertNote.run(body.filename, finalContent, originalText, cleanText, anonymizationProfileId, cleanVersion);
       const noteId = Number(info.lastInsertRowid);
+      
+      // Store audit record if anonymization was applied
+      if (body.anonymize && body.anonymizationConfig && anonymizationProfileId && anonymizationResult) {
+        const insertAudit = db.prepare(
+          'INSERT INTO anonymization_audit (document_id, profile_id, detector_version, summary, duration_ms) VALUES (?, ?, ?, ?, ?)'
+        );
+        insertAudit.run(noteId, anonymizationProfileId, '1.0.0', JSON.stringify(anonymizationResult.summary), anonymizationResult.duration);
+      }
 
       if (body.tags && body.tags.length > 0) {
         const upsertTag = db.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)');
@@ -112,6 +198,18 @@ export async function POST(req: NextRequest) {
           }
         });
         tx(body.tags);
+      }
+
+      // For preview requests, return anonymization results without creating a file
+      if (body.anonymize && body.anonymizationConfig && body.filename === 'preview.txt') {
+        const pipeline = new AnonymizationPipeline(body.anonymizationConfig);
+        const result = await pipeline.anonymizeText(body.content);
+        
+        return new Response(JSON.stringify({ 
+          anonymizedText: result.anonymizedText,
+          matches: result.matches,
+          summary: result.summary
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
       }
 
       return new Response(JSON.stringify({ id: noteId }), { status: 201, headers: { 'content-type': 'application/json' } });

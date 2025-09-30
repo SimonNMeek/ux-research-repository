@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useSunBackground } from '@/hooks/useSunBackground';
+import AnonymizeStep from '@/components/AnonymizeStep';
 
   type Result = { id: number; filename: string; snippet?: string; tags: string[]; is_favorite: boolean; created_at: string };
 type Note = { id: number; filename: string; content: string; tags: string[]; is_favorite: boolean };
@@ -30,6 +31,7 @@ export default function Home() {
   const [sortBy, setSortBy] = useState<'date-newest' | 'date-oldest' | 'favorites-first'>('date-newest');
   const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
   const sortDropdownRef = useRef<HTMLDivElement>(null);
+  const [anonymizationConfig, setAnonymizationConfig] = useState<any>(null);
 
   const prevent = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -67,6 +69,11 @@ export default function Home() {
     });
     form.append('tags', tagsInput);
     
+    if (anonymizationConfig) {
+      form.append('anonymize', 'true');
+      form.append('anonymizationConfig', JSON.stringify(anonymizationConfig));
+    }
+    
     try {
       const res = await fetch('/api/notes', { method: 'POST', body: form });
       const data = await res.json();
@@ -93,13 +100,41 @@ export default function Home() {
       
       setFiles([]);
       setTagsInput('');
+      setAnonymizationConfig(null);
       await runSearch();
     } catch (err) {
       alert('Upload failed');
     } finally {
       setUploading(false);
     }
-  }, [files, tagsInput, runSearch]);
+  }, [files, tagsInput, anonymizationConfig, runSearch]);
+
+  const handleAnonymizationPreview = useCallback(async (text: string, config: any) => {
+    try {
+      const res = await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: 'preview.txt',
+          content: text,
+          anonymize: true,
+          anonymizationConfig: config
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Preview failed');
+      
+      // Return the anonymization result
+      return {
+        anonymizedText: data.anonymizedText || text,
+        matches: data.matches || [],
+        summary: data.summary || { totalMatches: 0, byType: {}, byStrategy: {} }
+      };
+    } catch (error) {
+      console.error('Preview failed:', error);
+      throw error;
+    }
+  }, []);
 
   useEffect(() => {
     const h = setTimeout(() => {
@@ -400,6 +435,16 @@ export default function Home() {
             </Button>
           </div>
         </div>
+        
+        {files.length > 0 && (
+          <div className="mt-4">
+            <AnonymizeStep
+              files={files}
+              onConfigChange={setAnonymizationConfig}
+              onPreview={handleAnonymizationPreview}
+            />
+          </div>
+        )}
       </div>
 
         <div className="mt-6 flex gap-3 items-start">

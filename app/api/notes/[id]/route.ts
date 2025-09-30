@@ -12,8 +12,10 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       return new Response(JSON.stringify({ error: 'Invalid id' }), { status: 400 });
     }
     const db = getDb();
-    const note = db.prepare('SELECT id, filename, content, is_favorite FROM notes WHERE id = ?').get(id) as
-      | { id: number; filename: string; content: string; is_favorite: number }
+    const note = db
+      .prepare('SELECT id, filename, content, clean_text, is_favorite FROM notes WHERE id = ?')
+      .get(id) as
+      | { id: number; filename: string; content: string; clean_text?: string | null; is_favorite: number }
       | undefined;
     if (!note) {
       return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
@@ -25,13 +27,17 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
          WHERE nt.note_id = ?`
       )
       .all(id) as Array<{ tag: string }>;
+    const contentToReturn = (note as any).clean_text && (note as any).clean_text.length > 0
+      ? (note as any).clean_text
+      : note.content;
+
     return new Response(
-      JSON.stringify({ 
-        id: note.id, 
-        filename: note.filename, 
-        content: note.content, 
+      JSON.stringify({
+        id: note.id,
+        filename: note.filename,
+        content: contentToReturn,
         tags: tags.map((t) => t.tag),
-        is_favorite: Boolean(note.is_favorite)
+        is_favorite: Boolean(note.is_favorite),
       }),
       { status: 200, headers: { 'content-type': 'application/json' } }
     );

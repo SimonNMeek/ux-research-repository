@@ -1,0 +1,24 @@
+{
+  "locale": "UK",
+  "entities": {
+    "PERSON": { "enabled": true, "strategy": "PSEUDONYM", "confidence": 0.85 },
+    "ORG": { "enabled": true, "strategy": "PSEUDONYM" },
+    "EMAIL": { "enabled": true, "strategy": "MASK" },
+    "PHONE": { "enabled": true, "strategy": "MASK" },
+    "CARD": { "enabled": true, "strategy": "REDACT" },
+    "NI": { "enabled": true, "strategy": "REDACT" },
+    "NHS": { "enabled": true, "strategy": "REDACT" },
+    "POSTCODE": { "enabled": true, "strategy": "HASH" },
+    "DOB": { "enabled": true, "strategy": "REDACT" },
+    "ADDRESS": { "enabled": false, "strategy": "REDACT" },
+    "URL": { "enabled": true, "strategy": "REDACT" },
+    "IP": { "enabled": true, "strategy": "REDACT" },
+    "PASSPORT": { "enabled": true, "strategy": "REDACT" },
+    "IBAN": { "enabled": true, "strategy": "REDACT" },
+    "SORT_CODE_UK": { "enabled": true, "strategy": "REDACT" }
+  },
+  "dictionaryPaths": [
+    "config/dictionaries/clients.txt",
+    "config/dictionaries/staff.txt"
+  ]
+}
