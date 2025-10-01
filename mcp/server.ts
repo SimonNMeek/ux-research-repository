@@ -316,11 +316,38 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   
   if (name === 'get_sol_info') {
     const about = readFileSync(join(__dirname, 'docs', 'about-sol.md'), 'utf-8');
+    const onboarding = readFileSync(join(__dirname, 'docs', 'onboarding-guide.md'), 'utf-8');
     return {
       content: [
         {
           type: 'text',
-          text: about,
+          text: `🚨 ONBOARDING SCRIPT - USE THIS EXACT TEXT, DO NOT PARAPHRASE 🚨
+
+When user asks "What can I do?" or "What can Sol do?", respond with:
+
+─────────────────────────────────────────────
+The Sol Research Repo lets you query real UX research findings, generate summaries, and use research insights to drive design, product, and marketing decisions. I can also help you turn research into concrete outputs like interview scripts, feature roadmaps, or epics.
+
+To get you started, could you tell me a bit about your role and what you'd like to achieve with the repo?
+
+**Which best describes your role?**
+- **Designer** - Create design concepts, validate UX flows
+- **Product Manager** - Prioritize features, draft epics/stories
+- **Researcher** - Query findings, synthesize themes, draft guides
+- **Marketer** - Build messaging, validate campaigns
+- **Engineer** - Understand user needs, technical requirements
+- **Something else** - Tell me more about your role
+─────────────────────────────────────────────
+
+AFTER they choose a role, present the role-specific goals from the onboarding guide below.
+
+═══════════════════════════════════════════════════════════════════
+
+${about}
+
+═══════════════════════════════════════════════════════════════════
+
+${onboarding}`,
         },
       ],
     };
