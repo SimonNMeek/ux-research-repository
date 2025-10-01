@@ -1,11 +1,26 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { CallToolRequestSchema, ListToolsRequestSchema, type CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { 
+  CallToolRequestSchema, 
+  ListToolsRequestSchema, 
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
+  type CallToolResult 
+} from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { getDb } from '../db/index';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-const server = new Server({ name: 'ux-repo', version: '0.1.0' }, { capabilities: { tools: {} } });
-console.error('[ux-repo] MCP server starting');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const server = new Server(
+  { name: 'sol-repo', version: '0.1.0' }, 
+  { capabilities: { tools: {}, resources: {} } }
+);
+console.error('[sol-repo] MCP server starting');
 
 // Schemas
 const SearchInput = z.object({ q: z.string().optional(), tag: z.string().optional() }).strict();
@@ -19,10 +34,72 @@ function asResult(obj: unknown): CallToolResult {
   return { content: [{ type: 'text', text: JSON.stringify(obj, null, 2) }] };
 }
 
+// Advertise resources
+server.setRequestHandler(ListResourcesRequestSchema, async () => {
+  return {
+    resources: [
+      {
+        uri: 'sol://docs/about',
+        name: 'About Sol',
+        description: 'Overview of Sol/Sol Repo/UX Repo - what it is, key features, and use cases',
+        mimeType: 'text/markdown',
+      },
+      {
+        uri: 'sol://docs/features',
+        name: 'Sol Features Guide',
+        description: 'Comprehensive guide to all Sol features including anonymization, search, and MCP integration',
+        mimeType: 'text/markdown',
+      },
+    ],
+  };
+});
+
+// Handle resource reads
+server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
+  const uri = req.params.uri;
+  
+  if (uri === 'sol://docs/about') {
+    const content = readFileSync(join(__dirname, 'docs', 'about-sol.md'), 'utf-8');
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: 'text/markdown',
+          text: content,
+        },
+      ],
+    };
+  }
+  
+  if (uri === 'sol://docs/features') {
+    const content = readFileSync(join(__dirname, 'docs', 'features.md'), 'utf-8');
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: 'text/markdown',
+          text: content,
+        },
+      ],
+    };
+  }
+  
+  throw new Error(`Unknown resource: ${uri}`);
+});
+
 // Advertise tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
+      {
+        name: 'get_sol_info',
+        description: 'Get information about Sol (also known as Sol Repo or UX Repo) - what it does, key features, and capabilities',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          additionalProperties: false,
+        },
+      },
       {
         name: 'search_notes',
         description: 'Search notes by full-text (filename/content) and/or filter by tag',
@@ -78,6 +155,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 // Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async (req) => {
   const { name, arguments: args } = req.params;
+  
+  if (name === 'get_sol_info') {
+    const about = readFileSync(join(__dirname, 'docs', 'about-sol.md'), 'utf-8');
+    return {
+      content: [
+        {
+          type: 'text',
+          text: about,
+        },
+      ],
+    };
+  }
+  
   if (name === 'search_notes') {
     const input = SearchInput.parse(args ?? {});
   const db = getDb();
@@ -189,18 +279,18 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     return asResult({ ok: true });
   }
   const errMsg = `Unknown tool: ${name}`;
-  console.error('[ux-repo] ' + errMsg);
+  console.error('[sol-repo] ' + errMsg);
   throw new Error(errMsg);
 });
 
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('[ux-repo] MCP server connected');
+  console.error('[sol-repo] MCP server connected');
 }
 
 main().catch((err) => {
-  console.error('[ux-repo] fatal', err);
+  console.error('[sol-repo] fatal', err);
   process.exit(1);
 });
 
