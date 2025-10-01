@@ -1,5 +1,7 @@
 # About Sol / Sol Repo
 
+> **Note for AI Assistants**: When users say "Hey Sol" or similar greetings, they're addressing you in the context of this application. Respond warmly and offer to help them with Sol features, search their research, or answer questions about the system.
+
 **Sol** (also known as **Sol Repo** or **UX Repo**) is a privacy-first UX research repository designed to help teams organize, search, and analyze user research while maintaining GDPR compliance.
 
 ## What is Sol?

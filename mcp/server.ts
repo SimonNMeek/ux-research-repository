@@ -5,6 +5,8 @@ import {
   ListToolsRequestSchema, 
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
   type CallToolResult 
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
@@ -17,8 +19,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const server = new Server(
-  { name: 'sol-repo', version: '0.1.0' }, 
-  { capabilities: { tools: {}, resources: {} } }
+  { 
+    name: 'sol-repo', 
+    version: '0.1.0',
+  }, 
+  { 
+    capabilities: { 
+      tools: {}, 
+      resources: {},
+      prompts: {},
+    } 
+  }
 );
 console.error('[sol-repo] MCP server starting');
 
@@ -33,6 +44,45 @@ const AddTagInput = z.object({ noteId: z.number(), tag: z.string() }).strict();
 function asResult(obj: unknown): CallToolResult {
   return { content: [{ type: 'text', text: JSON.stringify(obj, null, 2) }] };
 }
+
+// Advertise prompts
+server.setRequestHandler(ListPromptsRequestSchema, async () => {
+  return {
+    prompts: [
+      {
+        name: 'sol-intro',
+        description: 'Introduction to Sol - triggers when user says "Hey Sol" or asks about Sol/Sol Repo/UX Repo',
+      },
+    ],
+  };
+});
+
+// Handle prompt requests
+server.setRequestHandler(GetPromptRequestSchema, async (req) => {
+  if (req.params.name === 'sol-intro') {
+    const about = readFileSync(join(__dirname, 'docs', 'about-sol.md'), 'utf-8');
+    return {
+      description: 'Introduction to Sol',
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: 'Tell me about Sol',
+          },
+        },
+        {
+          role: 'assistant',
+          content: {
+            type: 'text',
+            text: `Hey! I'm here to help you with Sol (also known as Sol Repo or UX Repo).\n\n${about}\n\nWhat would you like to know more about? I can help you with:\n- Searching and managing your research documents\n- Understanding the anonymization features\n- Tagging and organizing your files\n- Using the MCP integration\n\nJust ask!`,
+          },
+        },
+      ],
+    };
+  }
+  throw new Error(`Unknown prompt: ${req.params.name}`);
+});
 
 // Advertise resources
 server.setRequestHandler(ListResourcesRequestSchema, async () => {
