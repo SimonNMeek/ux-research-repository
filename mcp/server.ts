@@ -39,6 +39,14 @@ const GetNoteInput = z.object({ id: z.number() }).strict();
 const AddNoteInput = z.object({ filename: z.string(), content: z.string(), tags: z.array(z.string()).optional() }).strict();
 const ListTagsInput = z.object({}).strict();
 const AddTagInput = z.object({ noteId: z.number(), tag: z.string() }).strict();
+const SetUserPreferenceInput = z.object({ 
+  userId: z.string(), 
+  role: z.string().optional(),
+  preferredWorkflows: z.array(z.string()).optional(),
+  lastWorkflow: z.string().optional(),
+  quickActions: z.array(z.string()).optional(),
+}).strict();
+const GetUserPreferenceInput = z.object({ userId: z.string() }).strict();
 
 // Helper to wrap plain objects into CallToolResult
 function asResult(obj: unknown): CallToolResult {
@@ -52,6 +60,14 @@ server.setRequestHandler(ListPromptsRequestSchema, async () => {
       {
         name: 'sol-intro',
         description: 'Introduction to Sol - triggers when user says "Hey Sol" or asks about Sol/Sol Repo/UX Repo',
+      },
+      {
+        name: 'sol-onboarding',
+        description: 'Start onboarding journey - helps user set up their role and preferred workflows',
+      },
+      {
+        name: 'sol-what-can-i-do',
+        description: 'Explains what users can do with Sol based on their role',
       },
     ],
   };
@@ -81,6 +97,53 @@ server.setRequestHandler(GetPromptRequestSchema, async (req) => {
       ],
     };
   }
+  
+  if (req.params.name === 'sol-onboarding') {
+    const onboarding = readFileSync(join(__dirname, 'docs', 'onboarding-guide.md'), 'utf-8');
+    return {
+      description: 'Sol onboarding journey',
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: 'What can I do with Sol?',
+          },
+        },
+        {
+          role: 'assistant',
+          content: {
+            type: 'text',
+            text: `The Sol Research Repo lets you query real UX research findings, generate summaries, and use research insights to drive design, product, and marketing decisions. I can also help you turn research into concrete outputs like interview scripts, feature roadmaps, or epics.\n\nTo get you started, could you tell me a bit about your role and what you'd like to achieve with the repo?\n\n**Which best describes your role?**\n- **Designer** - Create design concepts, validate UX flows\n- **Product Manager** - Prioritize features, draft epics/stories\n- **Researcher** - Query findings, synthesize themes, draft guides\n- **Marketer** - Build messaging, validate campaigns\n- **Engineer** - Understand user needs, technical requirements\n- **Something else** - Tell me more about your role`,
+          },
+        },
+      ],
+    };
+  }
+  
+  if (req.params.name === 'sol-what-can-i-do') {
+    const onboarding = readFileSync(join(__dirname, 'docs', 'onboarding-guide.md'), 'utf-8');
+    return {
+      description: 'What can I do with Sol',
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: 'What can I do here?',
+          },
+        },
+        {
+          role: 'assistant',
+          content: {
+            type: 'text',
+            text: `The Sol Research Repo lets you query real UX research findings, generate summaries, and use research insights to drive design, product, and marketing decisions. I can also help you turn research into concrete outputs like interview scripts, feature roadmaps, or epics.\n\nTo get you started, could you tell me a bit about your role and what you'd like to achieve with the repo?`,
+          },
+        },
+      ],
+    };
+  }
+  
   throw new Error(`Unknown prompt: ${req.params.name}`);
 });
 
@@ -98,6 +161,12 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
         uri: 'sol://docs/features',
         name: 'Sol Features Guide',
         description: 'Comprehensive guide to all Sol features including anonymization, search, and MCP integration',
+        mimeType: 'text/markdown',
+      },
+      {
+        uri: 'sol://docs/onboarding',
+        name: 'Sol Onboarding Guide',
+        description: 'Role-based onboarding journey and workflow templates for getting started with Sol',
         mimeType: 'text/markdown',
       },
     ],
@@ -123,6 +192,19 @@ server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
   
   if (uri === 'sol://docs/features') {
     const content = readFileSync(join(__dirname, 'docs', 'features.md'), 'utf-8');
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: 'text/markdown',
+          text: content,
+        },
+      ],
+    };
+  }
+  
+  if (uri === 'sol://docs/onboarding') {
+    const content = readFileSync(join(__dirname, 'docs', 'onboarding-guide.md'), 'utf-8');
     return {
       contents: [
         {
@@ -195,6 +277,32 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: 'object',
           properties: { noteId: { type: 'number' }, tag: { type: 'string' } },
           required: ['noteId', 'tag'],
+          additionalProperties: false,
+        },
+      },
+      {
+        name: 'set_user_preference',
+        description: 'Save user preferences (role, preferred workflows, quick actions) for personalized experience',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            userId: { type: 'string' },
+            role: { type: 'string' },
+            preferredWorkflows: { type: 'array', items: { type: 'string' } },
+            lastWorkflow: { type: 'string' },
+            quickActions: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['userId'],
+          additionalProperties: false,
+        },
+      },
+      {
+        name: 'get_user_preference',
+        description: 'Get saved user preferences to personalize the experience',
+        inputSchema: {
+          type: 'object',
+          properties: { userId: { type: 'string' } },
+          required: ['userId'],
           additionalProperties: false,
         },
       },
@@ -328,6 +436,76 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     db.prepare('INSERT OR IGNORE INTO note_tags (note_id, tag_id) VALUES (?, ?)').run(input.noteId, row.id);
     return asResult({ ok: true });
   }
+  
+  if (name === 'set_user_preference') {
+    const input = SetUserPreferenceInput.parse(args ?? {});
+    const db = getDb();
+    
+    // Check if user exists
+    const existing = db.prepare('SELECT id FROM user_preferences WHERE user_id = ?').get(input.userId) as { id: number } | undefined;
+    
+    if (existing) {
+      // Update existing
+      const updates: string[] = [];
+      const values: any[] = [];
+      
+      if (input.role !== undefined) {
+        updates.push('role = ?');
+        values.push(input.role);
+      }
+      if (input.preferredWorkflows !== undefined) {
+        updates.push('preferred_workflows = ?');
+        values.push(JSON.stringify(input.preferredWorkflows));
+      }
+      if (input.lastWorkflow !== undefined) {
+        updates.push('last_workflow = ?');
+        values.push(input.lastWorkflow);
+      }
+      if (input.quickActions !== undefined) {
+        updates.push('quick_actions = ?');
+        values.push(JSON.stringify(input.quickActions));
+      }
+      updates.push('updated_at = CURRENT_TIMESTAMP');
+      values.push(input.userId);
+      
+      db.prepare(`UPDATE user_preferences SET ${updates.join(', ')} WHERE user_id = ?`).run(...values);
+    } else {
+      // Insert new
+      db.prepare(
+        'INSERT INTO user_preferences (user_id, role, preferred_workflows, last_workflow, quick_actions) VALUES (?, ?, ?, ?, ?)'
+      ).run(
+        input.userId,
+        input.role || null,
+        input.preferredWorkflows ? JSON.stringify(input.preferredWorkflows) : null,
+        input.lastWorkflow || null,
+        input.quickActions ? JSON.stringify(input.quickActions) : null
+      );
+    }
+    
+    return asResult({ ok: true });
+  }
+  
+  if (name === 'get_user_preference') {
+    const input = GetUserPreferenceInput.parse(args ?? {});
+    const db = getDb();
+    const pref = db.prepare('SELECT * FROM user_preferences WHERE user_id = ?').get(input.userId) as 
+      | { id: number; user_id: string; role: string | null; preferred_workflows: string | null; last_workflow: string | null; quick_actions: string | null }
+      | undefined;
+    
+    if (!pref) {
+      return asResult({ exists: false });
+    }
+    
+    return asResult({
+      exists: true,
+      userId: pref.user_id,
+      role: pref.role,
+      preferredWorkflows: pref.preferred_workflows ? JSON.parse(pref.preferred_workflows) : [],
+      lastWorkflow: pref.last_workflow,
+      quickActions: pref.quick_actions ? JSON.parse(pref.quick_actions) : [],
+    });
+  }
+  
   const errMsg = `Unknown tool: ${name}`;
   console.error('[sol-repo] ' + errMsg);
   throw new Error(errMsg);

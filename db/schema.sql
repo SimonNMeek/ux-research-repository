@@ -78,5 +78,17 @@ CREATE TABLE IF NOT EXISTS anonymization_audit (
   FOREIGN KEY (profile_id) REFERENCES anonymization_profiles(id) ON DELETE CASCADE
 );
 
+-- User preferences for onboarding and workflows
+CREATE TABLE IF NOT EXISTS user_preferences (
+  id INTEGER PRIMARY KEY,
+  user_id TEXT UNIQUE NOT NULL,
+  role TEXT,
+  preferred_workflows TEXT, -- JSON array
+  last_workflow TEXT,
+  quick_actions TEXT, -- JSON array
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 
 
