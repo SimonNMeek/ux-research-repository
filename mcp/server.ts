@@ -225,7 +225,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: 'get_sol_info',
-        description: 'Get information about Sol (also known as Sol Repo or UX Repo) - what it does, key features, and capabilities',
+        description: 'Get information about Sol (Sol Repo/UX Repo) - what it does and how to help users. READ THIS FIRST when user asks about Sol.',
         inputSchema: {
           type: 'object',
           properties: {},
@@ -234,7 +234,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'search_notes',
-        description: 'Search notes by full-text (filename/content) and/or filter by tag',
+        description: 'Search research documents by full-text (filename/content) and/or filter by tag. Use this to find research for user queries.',
         inputSchema: {
           type: 'object',
           properties: { q: { type: 'string' }, tag: { type: 'string' } },
@@ -243,7 +243,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'get_note',
-        description: 'Get a single note by id with content and tags',
+        description: 'Get full content of a research document by ID. Use after search_notes to read complete documents.',
         inputSchema: {
           type: 'object',
           properties: { id: { type: 'number' } },
@@ -253,7 +253,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'add_note',
-        description: 'Add a new note with optional tags',
+        description: '[INTERNAL ONLY] Add note programmatically - users should upload via web UI at localhost:3000',
         inputSchema: {
           type: 'object',
           properties: {
@@ -267,12 +267,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'list_tags',
-        description: 'List all tag names in alphabetical order',
+        description: 'List all available tags to help users filter research. Use this to show what research categories exist.',
         inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       },
       {
         name: 'add_tag',
-        description: 'Add a tag to a note',
+        description: '[INTERNAL ONLY] Add tag programmatically - users should tag via web UI at localhost:3000',
         inputSchema: {
           type: 'object',
           properties: { noteId: { type: 'number' }, tag: { type: 'string' } },

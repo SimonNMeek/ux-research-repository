@@ -1,5 +1,16 @@
 # Sol Onboarding Journey
 
+> **AI ASSISTANT: READ THIS CAREFULLY**
+> 
+> When a user asks "What can I do with Sol?" or "What can Sol do?" or "Hey Sol, what can I do here?":
+> 
+> 1. **DO NOT** list the MCP tools or explain technical capabilities
+> 2. **DO** follow the exact script in Step 1 below
+> 3. **DO** guide them through the role-based journey
+> 4. **DO** emphasize that you help them QUERY and ANALYZE research, not manage files
+> 
+> **Remember**: Users manage files via the web UI. Your job is to help them extract insights and create outputs from the research.
+
 ## Overview
 
 This guide provides a structured onboarding flow for new Sol users, tailored to their role and goals.

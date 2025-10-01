@@ -1,11 +1,30 @@
 # About Sol / Sol Repo
 
-> **Note for AI Assistants**: 
-> - When users say "Hey Sol" or similar greetings, they're addressing you in the context of this application. Respond warmly and offer to help.
-> - When users ask "What can I do with Sol?" or "What can Sol do?", trigger the onboarding journey using the `sol-onboarding` prompt or `sol://docs/onboarding` resource.
-> - Check for user preferences using `get_user_preference` tool to personalize responses.
-> - Guide users through role-based workflows rather than just returning raw data.
-> - Always cite research sources (note IDs and filenames) when providing insights.
+> **CRITICAL INSTRUCTIONS FOR AI ASSISTANTS**: 
+> 
+> **When users ask "What can I do?" or "What can Sol do?" or "Hey Sol, what can I do here?":**
+> 1. **IMMEDIATELY** read the `sol://docs/onboarding` resource
+> 2. Follow the onboarding flow exactly as specified
+> 3. Start with the value proposition, then ask about their role
+> 4. DO NOT list MCP tools - users interact via the web UI, not through you
+> 
+> **Your role with Sol:**
+> - **Query & synthesize research** for users using `search_notes` and `get_note` tools
+> - **Guide workflows** based on user role (Designer, PM, Researcher, Marketer, Engineer)
+> - **Generate insights** from research findings
+> - **Create outputs** like user stories, interview scripts, design concepts
+> - **NOT** to add files or tags (users do this via the web UI)
+> 
+> **When users say "Hey Sol":**
+> - Respond warmly, check for preferences with `get_user_preference(userId: "default")`
+> - If no preferences exist, start onboarding journey
+> - If preferences exist, welcome them back and suggest resuming or starting new task
+> 
+> **Always:**
+> - Cite research sources (note IDs and filenames)
+> - Ask clarifying questions before searching
+> - Synthesize insights, don't just dump raw data
+> - Offer to save workflow preferences when completing tasks
 
 **Sol** (also known as **Sol Repo** or **UX Repo**) is a privacy-first UX research repository designed to help teams organize, search, and analyze user research while maintaining GDPR compliance.
 
@@ -75,19 +94,36 @@ Sol is a web-based application that allows UX researchers, product teams, and de
 - **Icons**: Lucide React
 - **Database**: better-sqlite3 with FTS
 
-## Use Cases
+## What Sol Does (via AI Assistant)
+
+**Sol is NOT a file management system through Claude** - users upload and manage files via the web UI at http://localhost:3000.
+
+**What you CAN do through Claude + Sol:**
+- **Search research**: Query across all documents for specific topics
+- **Extract insights**: Synthesize findings from multiple sources
+- **Generate outputs**: Create user stories, interview scripts, design concepts
+- **Workflow guidance**: Get role-specific assistance with research-driven tasks
+- **Answer questions**: "What did users say about X?" with citations
+
+**What you CANNOT do through Claude:**
+- Upload files (use the web UI)
+- Add/remove tags (use the web UI)
+- Delete files (use the web UI)
+- Rename files (use the web UI)
+
+## Use Cases (via Claude)
 
 ### UX Research Teams
-Store interview transcripts, usability test notes, and user feedback while automatically anonymizing participant information.
+Query interview transcripts, synthesize themes across studies, generate research summaries.
 
 ### Product Teams
-Organize customer insights and feedback in a searchable, GDPR-compliant repository.
+Extract feature requirements from research, prioritize based on user needs, draft epics with research citations.
 
 ### Design Teams
-Collect and categorize user research to inform design decisions without privacy concerns.
+Validate designs against research, extract user preferences, generate design concepts from insights.
 
 ### Academic Research
-Maintain research participant privacy while keeping data organized and accessible.
+Query findings, identify research gaps, synthesize themes across participant interviews.
 
 ## Privacy & Compliance
 
