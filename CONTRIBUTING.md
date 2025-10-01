@@ -25,9 +25,31 @@ Welcome! This guide will help you collaborate on Sol (UX Research Repository) ev
 
 ### 4. Start the Application
 
-1. In the terminal, type: `npm run dev`
-2. Open your browser to: `http://localhost:3000`
-3. You should see the Sol interface!
+1. **Start the main app:**
+   ```bash
+   npm run dev
+   ```
+   Open your browser to: `http://localhost:3000`
+   You should see the Sol interface!
+
+2. **Start the MCP server (for Claude integration):**
+   ```bash
+   # Open a new terminal window/tab
+   cd mcp
+   npm start
+   ```
+   Should show: "MCP server running on port 3001"
+
+3. **Configure Claude Desktop:**
+   - Open Claude Desktop
+   - Go to Settings → Developer
+   - Add MCP server: `http://localhost:3001`
+   - Restart Claude Desktop
+
+4. **Test the connection:**
+   - Ask Claude: "Hey Sol, what can you do?"
+   - Should trigger the onboarding flow
+   - If you get generic responses, see troubleshooting below
 
 ## Working Together
 
@@ -207,6 +229,60 @@ Before pushing, always:
 - Test: Ask Claude questions about Sol
 - Restart MCP server after changes
 
+**⚠️ Common Issues & Solutions:**
+
+**"Server disconnected" or "Connection failed" errors:**
+1. **Check if MCP server is running:**
+   ```bash
+   # In the mcp/ directory
+   cd mcp
+   npm start
+   # Should show: "MCP server running on port 3001"
+   ```
+
+2. **If port 3001 is busy:**
+   ```bash
+   # Kill any existing MCP processes
+   pkill -f "mcp"
+   # Or find and kill manually:
+   lsof -ti:3001 | xargs kill -9
+   ```
+
+3. **Restart MCP server:**
+   ```bash
+   cd mcp
+   npm start
+   ```
+
+4. **Check Claude Desktop settings:**
+   - Open Claude Desktop
+   - Go to Settings → Developer
+   - Make sure MCP server is configured:
+     - Server: `http://localhost:3001`
+     - Or check if it's using a different port
+
+5. **If still having issues:**
+   ```bash
+   # Check what's running on port 3001
+   lsof -i :3001
+   
+   # Check MCP server logs for errors
+   cd mcp
+   npm start
+   # Look for error messages in the terminal
+   ```
+
+**"MCP tools not available" in Claude:**
+- Make sure MCP server is running (`npm start` in mcp/ directory)
+- Restart Claude Desktop completely
+- Check Claude Desktop → Settings → Developer → MCP servers
+- Verify the server URL is correct
+
+**Testing MCP connection:**
+- Ask Claude: "Hey Sol, what can you do?"
+- Should trigger the onboarding flow
+- If you get generic responses, MCP isn't connected properly
+
 ## Getting Help
 
 ### Error Messages
@@ -258,10 +334,13 @@ git stash pop
 # Morning routine
 git pull origin main
 npm run dev
+# In another terminal:
+cd mcp && npm start
 
 # Working
 # ... make changes ...
 # ... test in browser ...
+# ... test Claude integration ...
 
 # Saving work
 git add -A
@@ -271,6 +350,21 @@ git push origin main
 # Evening routine
 git push origin main
 # Tell partner you pushed!
+```
+
+**MCP Server Quick Commands:**
+```bash
+# Start MCP server
+cd mcp && npm start
+
+# Stop MCP server
+pkill -f "mcp"
+
+# Check if running
+lsof -i :3001
+
+# Restart if having issues
+pkill -f "mcp" && cd mcp && npm start
 ```
 
 ## Questions?
