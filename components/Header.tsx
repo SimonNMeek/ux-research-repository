@@ -1,9 +1,10 @@
 "use client";
 import { useState, useRef, useEffect } from 'react';
-import { User, Settings, CreditCard, LogOut, ChevronDown, Building2, Moon, Sun } from 'lucide-react';
+import { User, Settings, CreditCard, LogOut, ChevronDown, Building2, Moon, Sun, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useRouter, usePathname } from 'next/navigation';
 import { useDarkMode } from '@/hooks/useDarkMode';
+import CreateWorkspaceModal from '@/components/CreateWorkspaceModal';
 
 interface Workspace {
   id: number;
@@ -20,6 +21,7 @@ export default function Header() {
   const [workspaceDropdownOpen, setWorkspaceDropdownOpen] = useState(false);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   
   const dropdownRef = useRef<HTMLDivElement>(null);
   const workspaceDropdownRef = useRef<HTMLDivElement>(null);
@@ -27,31 +29,30 @@ export default function Header() {
   // Load workspaces and detect current workspace
   useEffect(() => {
     const loadWorkspaces = async () => {
-      const knownWorkspaces = ['demo-co', 'client-x'];
-      const workspaceData: Workspace[] = [];
+      try {
+        const response = await fetch('/api/workspaces');
+        if (response.ok) {
+          const data = await response.json();
+          const list: Workspace[] = (data.workspaces || []).map((w: any) => ({
+            id: w.id,
+            slug: w.slug,
+            name: w.name,
+          }));
+          setWorkspaces(list);
 
-      for (const slug of knownWorkspaces) {
-        try {
-          const response = await fetch(`/w/${slug}/api/workspace`);
-          if (response.ok) {
-            const workspace = await response.json();
-            workspaceData.push(workspace);
+          // Detect current workspace from URL
+          const match = pathname.match(/^\/w\/([^\/]+)/);
+          if (match) {
+            const currentSlug = match[1];
+            const current = list.find(w => w.slug === currentSlug) || null;
+            setCurrentWorkspace(current);
           }
-        } catch (err) {
-          console.warn(`Failed to load workspace ${slug}:`, err);
+        } else {
+          setWorkspaces([]);
         }
-      }
-
-      setWorkspaces(workspaceData);
-
-      // Detect current workspace from URL
-      const match = pathname.match(/^\/w\/([^\/]+)/);
-      if (match) {
-        const currentSlug = match[1];
-        const current = workspaceData.find(w => w.slug === currentSlug);
-        if (current) {
-          setCurrentWorkspace(current);
-        }
+      } catch (err) {
+        console.warn('Failed to load workspaces:', err);
+        setWorkspaces([]);
       }
     };
 
@@ -77,6 +78,12 @@ export default function Header() {
     setCurrentWorkspace(workspace);
     setWorkspaceDropdownOpen(false);
     router.push(`/w/${workspace.slug}`);
+  };
+
+  const handleWorkspaceCreated = (newWorkspace: Workspace) => {
+    setWorkspaces(prev => [...prev, newWorkspace]);
+    setCurrentWorkspace(newWorkspace);
+    router.push(`/w/${newWorkspace.slug}`);
   };
 
   return (
@@ -150,6 +157,17 @@ export default function Header() {
               >
                 <Building2 className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
                 All Workspaces
+              </button>
+              
+              <button
+                onClick={() => {
+                  setWorkspaceDropdownOpen(false);
+                  setCreateWorkspaceOpen(true);
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+              >
+                <Plus className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
+                Create Workspace
               </button>
             </div>
           )}
@@ -227,6 +245,13 @@ export default function Header() {
         )}
       </div>
       </div>
+
+      {/* Create Workspace Modal */}
+      <CreateWorkspaceModal
+        open={createWorkspaceOpen}
+        onOpenChange={setCreateWorkspaceOpen}
+        onWorkspaceCreated={handleWorkspaceCreated}
+      />
     </header>
   );
 }

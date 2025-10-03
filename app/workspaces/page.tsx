@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, Search, Users, FileText } from 'lucide-react';
+import { Building2, Search, Users, FileText, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Header from '@/components/Header';
+import CreateWorkspaceModal from '@/components/CreateWorkspaceModal';
 
 interface Workspace {
   id: number;
@@ -24,29 +25,15 @@ export default function WorkspacesPage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
 
   useEffect(() => {
     const loadWorkspaces = async () => {
       try {
-        // For now, we'll hardcode the known workspaces since we don't have a global API
-        // In a real app, you'd have a global /api/workspaces endpoint
-        const knownWorkspaces = ['demo-co', 'client-x'];
-        const workspaceData: Workspace[] = [];
-
-        for (const slug of knownWorkspaces) {
-          try {
-            const response = await fetch(`/w/${slug}/api/workspace`);
-            if (response.ok) {
-              const workspace = await response.json();
-              workspaceData.push(workspace);
-            }
-          } catch (err) {
-            // Workspace might not exist, skip it
-            console.warn(`Failed to load workspace ${slug}:`, err);
-          }
-        }
-
-        setWorkspaces(workspaceData);
+        const response = await fetch('/api/workspaces');
+        if (!response.ok) throw new Error('Failed to load workspaces');
+        const data = await response.json();
+        setWorkspaces(data.workspaces || []);
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -59,6 +46,11 @@ export default function WorkspacesPage() {
 
   const navigateToWorkspace = (workspaceSlug: string) => {
     router.push(`/w/${workspaceSlug}`);
+  };
+
+  const handleWorkspaceCreated = (newWorkspace: { id: number; slug: string; name: string }) => {
+    setWorkspaces(prev => [...prev, newWorkspace]);
+    router.push(`/w/${newWorkspace.slug}`);
   };
 
   if (loading) {
@@ -104,11 +96,20 @@ export default function WorkspacesPage() {
       <Header />
       <div className="max-w-4xl mx-auto p-6">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Choose a Workspace</h1>
-          <p className="text-gray-600">
-            Select a workspace to access its research documents and projects
-          </p>
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Choose a Workspace</h1>
+            <p className="text-gray-600">
+              Select a workspace to access its research documents and projects
+            </p>
+          </div>
+          <Button
+            onClick={() => setCreateWorkspaceOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            New Workspace
+          </Button>
         </div>
 
         {/* Workspaces Grid */}
@@ -119,6 +120,10 @@ export default function WorkspacesPage() {
             <p className="text-gray-600 mb-4">
               No workspaces are currently available. Contact your administrator to get access.
             </p>
+            <Button onClick={() => setCreateWorkspaceOpen(true)} className="inline-flex items-center gap-2">
+              <Plus className="w-4 h-4" />
+              Create Workspace
+            </Button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -177,6 +182,13 @@ export default function WorkspacesPage() {
           </div>
         )}
       </div>
+
+      {/* Create Workspace Modal */}
+      <CreateWorkspaceModal
+        open={createWorkspaceOpen}
+        onOpenChange={setCreateWorkspaceOpen}
+        onWorkspaceCreated={handleWorkspaceCreated}
+      />
     </div>
   );
 }
