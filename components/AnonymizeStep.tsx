@@ -124,6 +124,12 @@ export default function AnonymizeStep({ files, onConfigChange, onPreview }: Anon
         setPreviewText(text.substring(0, 1000)); // Limit preview to first 1000 chars
       };
       reader.readAsText(firstFile);
+    } else {
+      // Clear all state when files are empty (e.g., after upload)
+      setPreviewText('');
+      setShowPreview(false);
+      setPreviewResult(null);
+      setEnabled(false); // Close the anonymization panel
     }
   }, [files]);
 
@@ -174,11 +180,14 @@ export default function AnonymizeStep({ files, onConfigChange, onPreview }: Anon
     const { anonymizedText, matches } = previewResult;
     const original = previewText;
     
+    // Ensure matches is an array
+    const safeMatches = matches || [];
+    
     // Simple diff highlighting
     const parts = [];
     let lastIndex = 0;
     
-    for (const match of matches) {
+    for (const match of safeMatches) {
       // Add text before match
       if (match.start > lastIndex) {
         parts.push({

@@ -271,16 +271,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'get_sol_info',
-        description: 'Get information about Sol (Sol Repo/UX Repo) - what it does and how to help users. ALWAYS call this first when user asks about Sol or getting started.',
-        inputSchema: {
-          type: 'object',
-          properties: {},
-          additionalProperties: false,
-        },
-      },
-      {
-        name: 'auto_setup_workspace',
-        description: 'Automatically set up the user with the main workspace (Farm to Fork App) and show available options. Use this instead of asking users for workspace details.',
+        description: 'Get information about Sol (Sol Repo/UX Repo) - what it does and how to help users.',
         inputSchema: {
           type: 'object',
           properties: {},
@@ -444,16 +435,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToo
             type: 'text',
             text: `🚨 ONBOARDING SCRIPT - USE THIS EXACT TEXT, DO NOT PARAPHRASE 🚨
 
-When user asks "What can I do?" or "What can Sol do?" or "help me get started", respond with:
-
-Hey there! 👋 I'm Sol, your UX research assistant.
-
-The Sol Research Repo lets you query real UX research findings, generate summaries, and use research insights to drive design, product, and marketing decisions. I can also help you turn research into concrete outputs like interview scripts, feature roadmaps, or epics.
-
-I can see you have research documents available! Let me connect you to your main research workspace so we can get started.
-
-**IMPORTANT: After this response, IMMEDIATELY call auto_setup_workspace to set up the user automatically**
-
 When user asks "What can I do?" or "What can Sol do?", respond with:
 
 ─────────────────────────────────────────────
@@ -482,61 +463,6 @@ ${onboarding}`,
           },
         ],
       };
-    }
-
-    if (name === 'auto_setup_workspace') {
-      // Automatically set up Demo Co workspace
-      const workspace = workspaceRepo.getBySlug('demo-co');
-      if (workspace) {
-        activeWorkspace = {
-          id: workspace.id,
-          slug: workspace.slug,
-          name: workspace.name
-        };
-        
-        const projects = projectRepo.listByWorkspace(workspace.id);
-        const projectList = projects.map(p => `- **${p.name}**: ${p.description}`).join('\n');
-        
-        return {
-          content: [{ 
-            type: 'text', 
-            text: `Perfect! I've connected you to your **${workspace.name}** workspace. 
-
-Here's what I found:
-
-**Available Projects:**
-${projectList}
-
-**What would you like to do?**
-- Search for specific research insights (try "tell me about checkout" or "user feedback on onboarding")
-- Explore themes across your research documents
-- Get summaries of specific studies or interviews
-- Ask questions about user behavior patterns
-
-**Your Role:** To give you the most relevant help, what best describes your role?
-- **Designer** - Create design concepts, validate UX flows
-- **Product Manager** - Prioritize features, draft epics/stories  
-- **Researcher** - Query findings, synthesize themes, draft guides
-- **Marketer** - Build messaging, validate campaigns
-- **Engineer** - Understand user needs, technical requirements
-
-Just tell me what you'd like to explore, or ask me a question about your research!` 
-          }],
-        };
-      } else {
-        return {
-          content: [{ 
-            type: 'text', 
-            text: `I'm having trouble connecting to your research workspace. Let me help you get set up manually.
-
-Available workspaces:
-- **demo-co**: Farm to Fork App research repository
-- **client-x**: Client project workspace
-
-Which workspace would you like to use? Just say "demo-co" or "client-x" and I'll get you connected!` 
-          }],
-        };
-      }
     }
 
     if (name === 'set_user_preference') {
