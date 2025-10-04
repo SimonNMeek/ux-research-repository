@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, Search, Users, FileText, Plus } from 'lucide-react';
+import { FileBox, Search, Users, FileText, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Header from '@/components/Header';
 import CreateWorkspaceModal from '@/components/CreateWorkspaceModal';
@@ -14,6 +14,13 @@ interface Workspace {
   metadata: Record<string, any>;
 }
 
+interface Project {
+  id: number;
+  slug: string;
+  name: string;
+  document_count: number;
+}
+
 interface WorkspaceStats {
   workspace: Workspace;
   project_count: number;
@@ -23,17 +30,59 @@ interface WorkspaceStats {
 export default function WorkspacesPage() {
   const router = useRouter();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [workspaceProjects, setWorkspaceProjects] = useState<Record<string, Project[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
+
+  const loadProjectsForWorkspace = async (workspaceSlug: string): Promise<Project[]> => {
+    try {
+      const response = await fetch(`/w/${workspaceSlug}/api/projects`);
+      if (response.ok) {
+        const data = await response.json();
+        return data.projects || [];
+      }
+    } catch (err) {
+      console.warn(`Failed to load projects for workspace ${workspaceSlug}:`, err);
+    }
+    return [];
+  };
 
   useEffect(() => {
     const loadWorkspaces = async () => {
       try {
         const response = await fetch('/api/workspaces');
-        if (!response.ok) throw new Error('Failed to load workspaces');
-        const data = await response.json();
-        setWorkspaces(data.workspaces || []);
+        let workspaceData: Workspace[] = [];
+        
+        if (response.ok) {
+          const data = await response.json();
+          workspaceData = data.workspaces || [];
+        } else {
+          // Fallback to known workspaces
+          const knownWorkspaces = ['demo-co', 'client-x'];
+
+          for (const slug of knownWorkspaces) {
+            try {
+              const response = await fetch(`/w/${slug}/api/workspace`);
+              if (response.ok) {
+                const workspace = await response.json();
+                workspaceData.push(workspace);
+              }
+            } catch (err) {
+              // Workspace might not exist, skip it
+              console.warn(`Failed to load workspace ${slug}:`, err);
+            }
+          }
+        }
+        
+        setWorkspaces(workspaceData);
+        
+        // Load projects for each workspace
+        const projectsMap: Record<string, Project[]> = {};
+        for (const workspace of workspaceData) {
+          const projects = await loadProjectsForWorkspace(workspace.slug);
+          projectsMap[workspace.slug] = projects;
+        }
+        setWorkspaceProjects(projectsMap);
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -44,6 +93,46 @@ export default function WorkspacesPage() {
     loadWorkspaces();
   }, []);
 
+  const reloadWorkspaces = async () => {
+    try {
+      const response = await fetch('/api/workspaces');
+      let workspaceData: Workspace[] = [];
+      
+      if (response.ok) {
+        const data = await response.json();
+        workspaceData = data.workspaces || [];
+      } else {
+        // Fallback to known workspaces
+        const knownWorkspaces = ['demo-co', 'client-x'];
+
+        for (const slug of knownWorkspaces) {
+          try {
+            const response = await fetch(`/w/${slug}/api/workspace`);
+            if (response.ok) {
+              const workspace = await response.json();
+              workspaceData.push(workspace);
+            }
+          } catch (err) {
+            console.warn(`Failed to load workspace ${slug}:`, err);
+          }
+        }
+      }
+      
+      setWorkspaces(workspaceData);
+      
+      // Load projects for each workspace
+      const projectsMap: Record<string, Project[]> = {};
+      for (const workspace of workspaceData) {
+        const projects = await loadProjectsForWorkspace(workspace.slug);
+        projectsMap[workspace.slug] = projects;
+      }
+      setWorkspaceProjects(projectsMap);
+      
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
   const navigateToWorkspace = (workspaceSlug: string) => {
     router.push(`/w/${workspaceSlug}`);
   };
@@ -51,6 +140,10 @@ export default function WorkspacesPage() {
   const handleWorkspaceCreated = (newWorkspace: { id: number; slug: string; name: string }) => {
     setWorkspaces(prev => [...prev, newWorkspace]);
     router.push(`/w/${newWorkspace.slug}`);
+  };
+
+  const navigateToProject = (workspaceSlug: string, projectSlug: string) => {
+    router.push(`/w/${workspaceSlug}/projects/${projectSlug}`);
   };
 
   if (loading) {
@@ -96,34 +189,25 @@ export default function WorkspacesPage() {
       <Header />
       <div className="max-w-4xl mx-auto p-6">
         {/* Header */}
-        <div className="mb-8 flex items-start justify-between gap-4">
+        <div className="mb-8 flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold mb-2">Choose a Workspace</h1>
-            <p className="text-gray-600">
+            <p className="text-gray-600 dark:text-gray-400">
               Select a workspace to access its research documents and projects
             </p>
           </div>
-          <Button
-            onClick={() => setCreateWorkspaceOpen(true)}
-            className="flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            New Workspace
-          </Button>
+          <CreateWorkspaceModal onWorkspaceCreated={reloadWorkspaces} />
         </div>
 
         {/* Workspaces Grid */}
         {workspaces.length === 0 ? (
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
-            <Building2 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <FileBox className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No Workspaces Found</h3>
             <p className="text-gray-600 mb-4">
               No workspaces are currently available. Contact your administrator to get access.
             </p>
-            <Button onClick={() => setCreateWorkspaceOpen(true)} className="inline-flex items-center gap-2">
-              <Plus className="w-4 h-4" />
-              Create Workspace
-            </Button>
+            <CreateWorkspaceModal onWorkspaceCreated={reloadWorkspaces} />
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -136,7 +220,7 @@ export default function WorkspacesPage() {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center">
                     <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                      <Building2 className="w-5 h-5 text-blue-600" />
+                      <FileBox className="w-5 h-5 text-blue-600" />
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 group-hover:text-blue-600 transition-colors">
@@ -147,19 +231,30 @@ export default function WorkspacesPage() {
                   </div>
                 </div>
 
-                <div className="space-y-3 mb-4">
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Users className="w-4 h-4 mr-2" />
-                    <span>Multi-project workspace</span>
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Search className="w-4 h-4 mr-2" />
-                    <span>Full-text search available</span>
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <FileText className="w-4 h-4 mr-2" />
-                    <span>Research documents & insights</span>
-                  </div>
+                <div className="mb-4">
+                  <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">Projects</h4>
+                  {workspaceProjects[workspace.slug] && workspaceProjects[workspace.slug].length > 0 ? (
+                    <div className="space-y-2">
+                      {workspaceProjects[workspace.slug].map(project => (
+                        <div key={project.id} className="flex items-center justify-between text-sm">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigateToProject(workspace.slug, project.slug);
+                            }}
+                            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline text-left transition-colors"
+                          >
+                            {project.name}
+                          </button>
+                          <span className="text-gray-500 dark:text-gray-400">
+                            {project.document_count} {project.document_count === 1 ? 'file' : 'files'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">No projects yet</p>
+                  )}
                 </div>
 
                 <div className="flex justify-between items-center pt-4 border-t border-gray-100">
@@ -183,12 +278,6 @@ export default function WorkspacesPage() {
         )}
       </div>
 
-      {/* Create Workspace Modal */}
-      <CreateWorkspaceModal
-        open={createWorkspaceOpen}
-        onOpenChange={setCreateWorkspaceOpen}
-        onWorkspaceCreated={handleWorkspaceCreated}
-      />
     </div>
   );
 }

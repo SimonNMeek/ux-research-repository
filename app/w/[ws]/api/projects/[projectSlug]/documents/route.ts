@@ -35,7 +35,10 @@ const handler: WorkspaceRouteHandler = async (context, req, routeParams) => {
       // Get tags for each document
       const documentsWithTags = documents.map(doc => ({
         ...doc,
-        tags: tagRepo.getForDocument(doc.id).map(tag => tag.name)
+        tags: tagRepo.getForDocument(doc.id).map(tag => ({
+          id: tag.id,
+          name: tag.name
+        }))
       }));
 
       return new Response(

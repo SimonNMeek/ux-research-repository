@@ -24,6 +24,26 @@ export class ProjectRepo {
     }));
   }
 
+  listByWorkspaceWithDocumentCounts(workspaceId: number): (Project & { document_count: number })[] {
+    const rows = this.db
+      .prepare(`
+        SELECT p.*, 
+               COALESCE(COUNT(d.id), 0) as document_count
+        FROM projects p
+        LEFT JOIN documents d ON p.id = d.project_id
+        WHERE p.workspace_id = ?
+        GROUP BY p.id
+        ORDER BY p.name
+      `)
+      .all(workspaceId) as any[];
+    
+    return rows.map(row => ({
+      ...row,
+      document_count: row.document_count,
+      metadata: JSON.parse(row.metadata || '{}')
+    }));
+  }
+
   getBySlug(workspaceId: number, slug: string): Project | null {
     const row = this.db
       .prepare('SELECT * FROM projects WHERE workspace_id = ? AND slug = ?')

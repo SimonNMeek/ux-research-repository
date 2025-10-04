@@ -218,14 +218,14 @@ export default function AnonymizeStep({ files, onConfigChange, onPreview }: Anon
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <h4 className="font-semibold mb-2 text-red-600">Original</h4>
-            <div className="p-3 bg-red-50 border border-red-200 rounded text-sm">
+            <h4 className="font-semibold mb-2 text-red-600 dark:text-red-400">Original</h4>
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-gray-900 dark:text-gray-100">
               {parts.map((part, i) => (
                 <span
                   key={i}
                   className={
                     part.type === 'match'
-                      ? 'bg-yellow-200 px-1 rounded'
+                      ? 'bg-yellow-200 dark:bg-yellow-800 px-1 rounded'
                       : ''
                   }
                   title={part.type === 'match' ? `Detected: ${part.matchType}` : ''}
@@ -236,15 +236,15 @@ export default function AnonymizeStep({ files, onConfigChange, onPreview }: Anon
             </div>
           </div>
           <div>
-            <h4 className="font-semibold mb-2 text-green-600">Anonymized</h4>
-            <div className="p-3 bg-green-50 border border-green-200 rounded text-sm">
+            <h4 className="font-semibold mb-2 text-green-600 dark:text-green-400">Anonymized</h4>
+            <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded text-sm text-gray-900 dark:text-gray-100">
               {anonymizedText}
             </div>
           </div>
         </div>
         
         <div className="flex flex-wrap gap-2">
-          {Object.entries(previewResult.summary.byType).map(([type, count]) => (
+          {previewResult.summary.byType && Object.entries(previewResult.summary.byType).map(([type, count]) => (
             <Badge key={type} variant="secondary">
               {ENTITY_LABELS[type] || type}: {count}
             </Badge>
@@ -261,8 +261,9 @@ export default function AnonymizeStep({ files, onConfigChange, onPreview }: Anon
           id="anonymize"
           checked={enabled}
           onCheckedChange={setEnabled}
+          className="border-gray-300 dark:border-gray-600"
         />
-        <Label htmlFor="anonymize" className="text-sm font-medium">
+        <Label htmlFor="anonymize" className="text-sm font-medium text-gray-900 dark:text-gray-100">
           Anonymize on import
         </Label>
       </div>
@@ -270,7 +271,7 @@ export default function AnonymizeStep({ files, onConfigChange, onPreview }: Anon
       {enabled && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Anonymization Settings</CardTitle>
+            <CardTitle className="text-lg text-gray-900 dark:text-gray-100">Anonymization Settings</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <Tabs defaultValue="entities" className="w-full">
@@ -282,13 +283,14 @@ export default function AnonymizeStep({ files, onConfigChange, onPreview }: Anon
               <TabsContent value="entities" className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {Object.entries(config.entities).map(([entityType, entityConfig]) => (
-                    <div key={entityType} className="flex items-center justify-between p-3 border rounded">
+                    <div key={entityType} className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded">
                       <div className="flex items-center space-x-2">
                         <Checkbox
                           checked={entityConfig.enabled}
                           onCheckedChange={(checked) => handleEntityToggle(entityType, checked as boolean)}
+                          className="border-gray-300 dark:border-gray-600"
                         />
-                        <Label className="text-sm">
+                        <Label className="text-sm text-gray-900 dark:text-gray-100">
                           {ENTITY_LABELS[entityType] || entityType}
                         </Label>
                       </div>
@@ -318,8 +320,8 @@ export default function AnonymizeStep({ files, onConfigChange, onPreview }: Anon
               <TabsContent value="preview" className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="font-semibold">Preview Anonymization</h4>
-                    <p className="text-sm text-gray-600">
+                    <h4 className="font-semibold text-gray-900 dark:text-gray-100">Preview Anonymization</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
                       Preview how the first file will be anonymized
                     </p>
                   </div>
@@ -345,8 +347,9 @@ export default function AnonymizeStep({ files, onConfigChange, onPreview }: Anon
                 id="applyToAll"
                 checked={applyToAll}
                 onCheckedChange={setApplyToAll}
+                className="border-gray-300 dark:border-gray-600"
               />
-              <Label htmlFor="applyToAll" className="text-sm">
+              <Label htmlFor="applyToAll" className="text-sm text-gray-900 dark:text-gray-100">
                 Apply to all files in this batch
               </Label>
             </div>

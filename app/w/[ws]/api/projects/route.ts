@@ -11,7 +11,7 @@ const handler: WorkspaceRouteHandler = async (context, req) => {
 
   if (req.method === 'GET') {
     try {
-      const projects = projectRepo.listByWorkspace(workspace.id);
+      const projects = projectRepo.listByWorkspaceWithDocumentCounts(workspace.id);
       return new Response(
         JSON.stringify({ projects }),
         {

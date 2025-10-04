@@ -34,7 +34,7 @@ interface Document {
   clean_text?: string;
   is_favorite: boolean;
   created_at: string;
-  tags: string[];
+  tags: { id: number; name: string }[];
 }
 
 export default function ProjectPage() {
@@ -67,7 +67,7 @@ export default function ProjectPage() {
     open: false, document: null, loading: false 
   });
   const [editingTags, setEditingTags] = useState<{ 
-    open: boolean; documentId: number | null; currentTags: string[]; newTag: string 
+    open: boolean; documentId: number | null; currentTags: { id: number; name: string }[]; newTag: string 
   }>({ open: false, documentId: null, currentTags: [], newTag: '' });
   const [renaming, setRenaming] = useState<{ 
     open: boolean; documentId: number | null; currentTitle: string; newTitle: string 
@@ -112,10 +112,14 @@ export default function ProjectPage() {
         const tags = new Set<string>();
         documentsData.documents.forEach((doc: Document) => {
           if (doc.tags && Array.isArray(doc.tags)) {
-            doc.tags.forEach(tag => tags.add(tag));
+            doc.tags.forEach(tag => tags.add(tag.name));
           }
         });
-        setAllTags(Array.from(tags).sort());
+        const finalTags = Array.from(tags).sort();
+        const safeTags = finalTags.filter((tag, index, arr) => 
+          typeof tag === 'string' && tag.trim() && arr.indexOf(tag) === index
+        );
+        setAllTags(safeTags);
         
       } catch (err: any) {
         setError(err.message);
@@ -236,12 +240,34 @@ export default function ProjectPage() {
       setUploadTags('');
       setAnonymizationConfig(null);
       
-      // Refresh tags
-      const tags = new Set<string>();
-      documents.forEach(doc => {
-        doc.tags.forEach(tag => tags.add(tag));
-      });
-      setAllTags(Array.from(tags).sort());
+      // Refresh tags from API
+      try {
+        const docsResponse = await fetch(`/w/${workspaceSlug}/api/projects/${projectSlug}/documents`);
+        if (docsResponse.ok) {
+          const docsData = await docsResponse.json();
+          const tags = new Set<string>();
+          docsData.documents.forEach((doc: any) => {
+            if (doc.tags && Array.isArray(doc.tags)) {
+              doc.tags.forEach((tag: any) => {
+                if (tag && typeof tag === 'object' && tag.name) {
+                  tags.add(tag.name);
+                } else if (typeof tag === 'string') {
+                  tags.add(tag);
+                }
+              });
+            }
+          });
+          const finalTags = Array.from(tags).sort();
+          console.log('Setting allTags:', finalTags);
+          // Ensure allTags contains only unique strings
+          const safeTags = finalTags.filter((tag, index, arr) => 
+            typeof tag === 'string' && tag.trim() && arr.indexOf(tag) === index
+          );
+          setAllTags(safeTags);
+        }
+      } catch (err) {
+        console.error('Failed to refresh tags:', err);
+      }
       
     } catch (err: any) {
       alert(err.message);
@@ -337,9 +363,13 @@ export default function ProjectPage() {
         // Update all tags
         const tags = new Set<string>();
         documentsData.documents.forEach((doc: Document) => {
-          doc.tags.forEach(tag => tags.add(tag));
+          doc.tags.forEach(tag => tags.add(tag.name));
         });
-        setAllTags(Array.from(tags).sort());
+        const finalTags = Array.from(tags).sort();
+        const safeTags = finalTags.filter((tag, index, arr) => 
+          typeof tag === 'string' && tag.trim() && arr.indexOf(tag) === index
+        );
+        setAllTags(safeTags);
 
         // Update current editing modal tags if this was for the currently editing document
         if (editingTags.documentId === documentId) {
@@ -376,9 +406,13 @@ export default function ProjectPage() {
         // Update all tags
         const tags = new Set<string>();
         documentsData.documents.forEach((doc: Document) => {
-          doc.tags.forEach(tag => tags.add(tag));
+          doc.tags.forEach(tag => tags.add(tag.name));
         });
-        setAllTags(Array.from(tags).sort());
+        const finalTags = Array.from(tags).sort();
+        const safeTags = finalTags.filter((tag, index, arr) => 
+          typeof tag === 'string' && tag.trim() && arr.indexOf(tag) === index
+        );
+        setAllTags(safeTags);
 
         // Update current editing modal tags if this was for the currently editing document
         if (editingTags.documentId === documentId) {
@@ -458,6 +492,12 @@ export default function ProjectPage() {
       .trim();
   }, []);
 
+  // Memoized safe tags to prevent hydration issues
+  const safeAllTags = useMemo(() => {
+    if (!Array.isArray(allTags)) return [];
+    return allTags.filter(tag => typeof tag === 'string' && tag.trim());
+  }, [allTags]);
+
   // Tag suggestions
   const updateTagSuggestions = useCallback((input: string) => {
     if (!input.trim()) {
@@ -465,13 +505,13 @@ export default function ProjectPage() {
       return;
     }
     
-    const filtered = allTags.filter(tag => 
+    const filtered = safeAllTags.filter(tag => 
       tag.toLowerCase().includes(input.toLowerCase()) &&
-      !editingTags.currentTags.includes(tag)
+      !editingTags.currentTags.some(currentTag => currentTag.name === tag)
     ).slice(0, 5);
     
     setTagSuggestions(filtered);
-  }, [allTags, editingTags.currentTags]);
+  }, [safeAllTags, editingTags.currentTags]);
 
   if (error) {
     return (
@@ -580,8 +620,8 @@ export default function ProjectPage() {
                 <h3 className="font-medium mb-3">Selected Files ({uploadFiles.length})</h3>
                 <div className="space-y-2">
                   {uploadFiles.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
-                      <span className="text-sm font-medium">{file.name}</span>
+                    <div key={index} className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{file.name}</span>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -601,7 +641,9 @@ export default function ProjectPage() {
               <div>
                 <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Previous tags</Label>
                 <div className="flex flex-wrap gap-2">
-                  {allTags.slice(0, 10).map(tag => (
+                  {safeAllTags
+                    .slice(0, 10)
+                    .map((tag, index) => (
                     <button
                       key={tag}
                       onClick={() => {
@@ -627,7 +669,7 @@ export default function ProjectPage() {
                 value={uploadTags}
                 onChange={(e) => setUploadTags(e.target.value)}
                 placeholder="Enter tags separated by commas..."
-                className="w-full"
+                className="w-full border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
               />
             </div>
 
@@ -635,25 +677,58 @@ export default function ProjectPage() {
             <AnonymizeStep
               files={uploadFiles}
               onConfigChange={setAnonymizationConfig}
-              onPreview={async (content) => {
-                // For now, return the original content - preview will be re-enabled later
-                return {
-                  anonymizedText: content,
-                  matches: [],
-                  summary: { totalReplacements: 0, categories: {} }
-                };
+              onPreview={async (content, config) => {
+                try {
+                  // Call the anonymization API for preview
+                  const formData = new FormData();
+                  formData.append('text', content);
+                  formData.append('config', JSON.stringify(config));
+                  
+                  const response = await fetch('/api/anonymize-preview', {
+                    method: 'POST',
+                    body: formData
+                  });
+                  
+                  if (!response.ok) {
+                    throw new Error('Failed to anonymize preview');
+                  }
+                  
+                  const result = await response.json();
+                  return {
+                    anonymizedText: result.anonymizedText,
+                    matches: result.matches || [],
+                    summary: result.summary || { totalReplacements: 0, byType: {}, byStrategy: {} }
+                  };
+                } catch (error) {
+                  console.error('Anonymization preview failed:', error);
+                  // Return original content as fallback
+                  return {
+                    anonymizedText: content,
+                    matches: [],
+                    summary: { totalReplacements: 0, byType: {}, byStrategy: {} }
+                  };
+                }
               }}
             />
 
             {/* Upload Button */}
             {uploadFiles.length > 0 && (
-              <Button 
-                onClick={handleUpload} 
-                disabled={uploading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {uploading ? 'Uploading...' : `Upload ${uploadFiles.length} ${uploadFiles.length === 1 ? 'file' : 'files'}`}
-              </Button>
+              <div className="flex gap-3">
+                <Button 
+                  onClick={() => setUploadFiles([])} 
+                  disabled={uploading}
+                  variant="secondary"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleUpload} 
+                  disabled={uploading}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  {uploading ? 'Uploading...' : `Upload ${uploadFiles.length} ${uploadFiles.length === 1 ? 'file' : 'files'}`}
+                </Button>
+              </div>
             )}
           </div>
         </div>
@@ -668,7 +743,7 @@ export default function ProjectPage() {
                 placeholder="Search documents..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="pl-10 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
               />
             </div>
             
@@ -679,7 +754,7 @@ export default function ProjectPage() {
                 placeholder="Filter by tag..."
                 value={tagFilter}
                 onChange={(e) => setTagFilter(e.target.value)}
-                className="pl-10"
+                className="pl-10 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
               />
             </div>
 
@@ -727,8 +802,8 @@ export default function ProjectPage() {
               {document.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1 mb-3">
                   {document.tags.map(tag => (
-                    <span key={tag} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
-                      {tag}
+                    <span key={tag.id} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                      {tag.name}
                     </span>
                   ))}
                 </div>
@@ -801,7 +876,7 @@ export default function ProjectPage() {
           open={viewingDocument.open} 
           onOpenChange={(open) => setViewingDocument({ open, document: null, loading: false })}
         >
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
             <DialogHeader>
               <DialogTitle>
                 {viewingDocument.document?.title || 'Loading...'}
@@ -810,18 +885,18 @@ export default function ProjectPage() {
             <div className="mt-4">
               {viewingDocument.loading ? (
                 <div className="animate-pulse space-y-3">
-                  <div className="h-4 bg-gray-200 rounded"></div>
-                  <div className="h-4 bg-gray-200 rounded"></div>
-                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
                 </div>
               ) : viewingDocument.document ? (
-                <div className="prose max-w-none">
+                <div className="prose max-w-none prose-gray dark:prose-invert">
                   <ReactMarkdown>
                     {viewingDocument.document.clean_text || viewingDocument.document.body}
                   </ReactMarkdown>
                 </div>
               ) : (
-                <p className="text-gray-500">Failed to load document</p>
+                <p className="text-gray-500 dark:text-gray-400">Failed to load document</p>
               )}
             </div>
           </DialogContent>
@@ -835,29 +910,29 @@ export default function ProjectPage() {
             setTagSuggestions([]);
           }}
         >
-          <DialogContent>
+          <DialogContent className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
             <DialogHeader>
-              <DialogTitle>Edit Tags</DialogTitle>
+              <DialogTitle className="text-gray-900 dark:text-gray-100">Edit Tags</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-4">
               <div>
-                <Label>Current Tags</Label>
+                <Label className="text-gray-900 dark:text-gray-100">Current Tags</Label>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {editingTags.currentTags.map(tag => (
-                    <span key={tag} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center gap-2">
-                      {tag}
+                    <span key={tag.id} className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full text-sm flex items-center gap-2">
+                      {tag.name}
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => editingTags.documentId && removeTag(editingTags.documentId, tag)}
-                        className="p-0 h-auto text-blue-600 hover:text-blue-800"
+                        onClick={() => editingTags.documentId && removeTag(editingTags.documentId, tag.name)}
+                        className="p-0 h-auto text-blue-600 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-100"
                       >
                         <X className="w-3 h-3" />
                       </Button>
                     </span>
                   ))}
                   {editingTags.currentTags.length === 0 && (
-                    <span className="text-gray-500 text-sm">No tags yet</span>
+                    <span className="text-gray-500 dark:text-gray-400 text-sm">No tags yet</span>
                   )}
                 </div>
               </div>
@@ -867,8 +942,8 @@ export default function ProjectPage() {
                 <div>
                   <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Existing tags</Label>
                   <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
-                    {allTags
-                      .filter(tag => !editingTags.currentTags.includes(tag))
+                    {safeAllTags
+                      .filter(tag => !editingTags.currentTags.some(currentTag => currentTag.name === tag))
                       .slice(0, 15)
                       .map(tag => (
                         <button
@@ -880,20 +955,20 @@ export default function ProjectPage() {
                               setTagSuggestions(prev => prev.filter(t => t !== tag));
                             }
                           }}
-                          className="bg-gray-100 hover:bg-gray-200 text-gray-700 dark:text-gray-300 px-3 py-1 rounded-full text-sm transition-colors"
+                          className="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 px-3 py-1 rounded-full text-sm transition-colors"
                         >
                           {tag}
                         </button>
                       ))}
                   </div>
-                  {allTags.filter(tag => !editingTags.currentTags.includes(tag)).length === 0 && (
-                    <span className="text-gray-500 text-sm">All existing tags are already added</span>
+                  {allTags.filter(tag => !editingTags.currentTags.some(currentTag => currentTag.name === tag)).length === 0 && (
+                    <span className="text-gray-500 dark:text-gray-400 text-sm">All existing tags are already added</span>
                   )}
                 </div>
               )}
               
               <div className="relative">
-                <Label htmlFor="new-tag">Add New Tag</Label>
+                <Label htmlFor="new-tag" className="text-gray-900 dark:text-gray-100">Add New Tag</Label>
                 <div className="flex gap-2 mt-1">
                   <div className="flex-1 relative">
                     <Input
@@ -905,6 +980,7 @@ export default function ProjectPage() {
                         updateTagSuggestions(value);
                       }}
                       placeholder="Enter tag name..."
+                      className="border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                       onKeyPress={(e) => {
                         if (e.key === 'Enter' && editingTags.newTag.trim() && editingTags.documentId) {
                           addTag(editingTags.documentId, editingTags.newTag);
@@ -914,11 +990,11 @@ export default function ProjectPage() {
                       }}
                     />
                     {tagSuggestions.length > 0 && (
-                      <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-md shadow-lg z-50 mt-1">
+                      <div className="absolute top-full left-0 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-50 mt-1">
                         {tagSuggestions.map(tag => (
                           <button
                             key={tag}
-                            className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm"
+                            className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm text-gray-900 dark:text-gray-100"
                             onClick={() => {
                               if (editingTags.documentId) {
                                 addTag(editingTags.documentId, tag);
@@ -956,7 +1032,7 @@ export default function ProjectPage() {
           open={renaming.open} 
           onOpenChange={(open) => setRenaming({ open, documentId: null, currentTitle: '', newTitle: '' })}
         >
-          <DialogContent>
+          <DialogContent className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
             <DialogHeader>
               <DialogTitle>Rename File</DialogTitle>
             </DialogHeader>
@@ -968,7 +1044,7 @@ export default function ProjectPage() {
                   value={renaming.newTitle}
                   onChange={(e) => setRenaming(prev => ({ ...prev, newTitle: e.target.value }))}
                   placeholder="Enter new filename..."
-                  className="mt-1"
+                  className="mt-1 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                   onKeyPress={(e) => {
                     if (e.key === 'Enter' && renaming.newTitle.trim() && renaming.documentId) {
                       renameDocument(renaming.documentId, renaming.newTitle);
@@ -1000,7 +1076,7 @@ export default function ProjectPage() {
 
         {/* Project Rename Modal */}
         <Dialog open={renamingProject.open} onOpenChange={(open) => !open && setRenamingProject({ open: false, currentName: '', newName: '' })}>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[425px] bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
             <DialogHeader>
               <DialogTitle>Rename Project</DialogTitle>
             </DialogHeader>
@@ -1016,7 +1092,7 @@ export default function ProjectPage() {
                   value={renamingProject.newName}
                   onChange={(e) => setRenamingProject(prev => ({ ...prev, newName: e.target.value }))}
                   placeholder="Enter new project name..."
-                  className="mt-1"
+                  className="mt-1 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                   onKeyPress={(e) => {
                     if (e.key === 'Enter' && renamingProject.newName.trim()) {
                       renameProject(renamingProject.newName);

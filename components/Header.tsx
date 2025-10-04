@@ -33,26 +33,39 @@ export default function Header() {
         const response = await fetch('/api/workspaces');
         if (response.ok) {
           const data = await response.json();
-          const list: Workspace[] = (data.workspaces || []).map((w: any) => ({
-            id: w.id,
-            slug: w.slug,
-            name: w.name,
-          }));
-          setWorkspaces(list);
-
-          // Detect current workspace from URL
-          const match = pathname.match(/^\/w\/([^\/]+)/);
-          if (match) {
-            const currentSlug = match[1];
-            const current = list.find(w => w.slug === currentSlug) || null;
-            setCurrentWorkspace(current);
-          }
+          setWorkspaces(data.workspaces || []);
         } else {
-          setWorkspaces([]);
+          console.warn('Failed to load workspaces from API, falling back to known workspaces');
+          // Fallback to known workspaces
+          const knownWorkspaces = ['demo-co', 'client-x'];
+          const workspaceData: Workspace[] = [];
+
+          for (const slug of knownWorkspaces) {
+            try {
+              const response = await fetch(`/w/${slug}/api/workspace`);
+              if (response.ok) {
+                const workspace = await response.json();
+                workspaceData.push(workspace);
+              }
+            } catch (err) {
+              console.warn(`Failed to load workspace ${slug}:`, err);
+            }
+          }
+          setWorkspaces(workspaceData);
         }
       } catch (err) {
-        console.warn('Failed to load workspaces:', err);
+        console.error('Failed to load workspaces:', err);
         setWorkspaces([]);
+      }
+
+      // Detect current workspace from URL
+      const match = pathname.match(/^\/w\/([^\/]+)/);
+      if (match) {
+        const currentSlug = match[1];
+        const current = workspaces.find(w => w.slug === currentSlug);
+        if (current) {
+          setCurrentWorkspace(current);
+        }
       }
     };
 
@@ -84,6 +97,18 @@ export default function Header() {
     setWorkspaces(prev => [...prev, newWorkspace]);
     setCurrentWorkspace(newWorkspace);
     router.push(`/w/${newWorkspace.slug}`);
+  };
+
+  const reloadWorkspaces = async () => {
+    try {
+      const response = await fetch('/api/workspaces');
+      if (response.ok) {
+        const data = await response.json();
+        setWorkspaces(data.workspaces || []);
+      }
+    } catch (err) {
+      console.error('Failed to reload workspaces:', err);
+    }
   };
 
   return (
@@ -147,6 +172,16 @@ export default function Header() {
               )}
               
               <div className="border-t border-gray-100 dark:border-gray-700 my-1"></div>
+              
+              <CreateWorkspaceModal 
+                onWorkspaceCreated={handleWorkspaceCreated}
+                className="w-full justify-start text-left px-4 py-2 h-auto font-normal"
+              >
+                <button className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center">
+                  <Plus className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
+                  Create Workspace
+                </button>
+              </CreateWorkspaceModal>
               
               <button
                 onClick={() => {
