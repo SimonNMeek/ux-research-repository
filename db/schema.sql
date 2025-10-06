@@ -90,5 +90,28 @@ CREATE TABLE IF NOT EXISTS user_preferences (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Minimal authentication tables
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  is_active INTEGER DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  last_login_at DATETIME
+);
+
+CREATE TABLE IF NOT EXISTS user_sessions (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  expires_at DATETIME NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Seed a default admin user if not exists (password: admin123)
+INSERT OR IGNORE INTO users (email, name, password_hash, is_active)
+VALUES ('admin@sol.com', 'Admin User', 'admin123', 1);
+
 
 
