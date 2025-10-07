@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server';
 import { destroySession, getSessionCookie, clearSessionCookie } from '@/lib/auth';
 
 export async function POST() {
-  const sessionId = getSessionCookie();
+  const sessionId = await getSessionCookie();
   destroySession(sessionId);
-  clearSessionCookie();
+  await clearSessionCookie();
   return NextResponse.json({ ok: true });
 }
 

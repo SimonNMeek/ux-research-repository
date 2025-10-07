@@ -6,6 +6,13 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useDarkMode } from '@/hooks/useDarkMode';
 import CreateWorkspaceModal from '@/components/CreateWorkspaceModal';
 
+interface AuthUser {
+  id: number;
+  email: string;
+  name: string;
+  is_active: number;
+}
+
 interface Workspace {
   id: number;
   slug: string;
@@ -22,13 +29,26 @@ export default function Header() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
   
   const dropdownRef = useRef<HTMLDivElement>(null);
   const workspaceDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Load workspaces and detect current workspace
+  // Load user info and workspaces
   useEffect(() => {
-    const loadWorkspaces = async () => {
+    const loadUserAndWorkspaces = async () => {
+      // Load user info
+      try {
+        const userResponse = await fetch('/api/auth/me');
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          setUser(userData.user);
+        }
+      } catch (err) {
+        console.error('Failed to load user:', err);
+      }
+
+      // Load workspaces
       try {
         const response = await fetch('/api/workspaces');
         if (response.ok) {
@@ -69,7 +89,7 @@ export default function Header() {
       }
     };
 
-    loadWorkspaces();
+    loadUserAndWorkspaces();
   }, [pathname]);
 
   // Close dropdowns when clicking outside
@@ -108,6 +128,18 @@ export default function Header() {
       }
     } catch (err) {
       console.error('Failed to reload workspaces:', err);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      const response = await fetch('/api/auth/logout', { method: 'POST' });
+      if (response.ok) {
+        setUser(null);
+        router.push('/login');
+      }
+    } catch (err) {
+      console.error('Logout failed:', err);
     }
   };
 
@@ -243,7 +275,7 @@ export default function Header() {
             />
             <User className="w-4 h-4 text-gray-600 hidden" />
           </div>
-          <span className="text-sm text-gray-700 dark:text-gray-300">Tony James</span>
+          <span className="text-sm text-gray-700 dark:text-gray-300">{user?.name || 'Loading...'}</span>
           <ChevronDown className="w-4 h-4 text-gray-500 dark:text-gray-400" />
         </Button>
 
@@ -251,8 +283,8 @@ export default function Header() {
         {dropdownOpen && (
           <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
             <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Tony James</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">tony.james@example.com</p>
+              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{user?.name || 'Loading...'}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{user?.email || 'Loading...'}</p>
             </div>
             
             <button className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center">
@@ -272,7 +304,10 @@ export default function Header() {
             
             <div className="border-t border-gray-100 dark:border-gray-700 my-1"></div>
             
-            <button className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center">
+            <button 
+              onClick={handleLogout}
+              className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center"
+            >
               <LogOut className="w-4 h-4 mr-3 text-red-500 dark:text-red-400" />
               Sign out
             </button>

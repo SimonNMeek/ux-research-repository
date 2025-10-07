@@ -43,8 +43,8 @@ export function destroySession(sessionId: string | undefined): void {
   db.prepare(`DELETE FROM user_sessions WHERE id = ?`).run(sessionId);
 }
 
-export function setSessionCookie(sessionId: string, expiresAtIso: string) {
-  const store = cookies();
+export async function setSessionCookie(sessionId: string, expiresAtIso: string) {
+  const store = await cookies();
   store.set('session_id', sessionId, {
     httpOnly: true,
     sameSite: 'lax',
@@ -53,13 +53,13 @@ export function setSessionCookie(sessionId: string, expiresAtIso: string) {
   });
 }
 
-export function getSessionCookie(): string | undefined {
-  const store = cookies();
+export async function getSessionCookie(): Promise<string | undefined> {
+  const store = await cookies();
   return store.get('session_id')?.value;
 }
 
-export function clearSessionCookie() {
-  const store = cookies();
+export async function clearSessionCookie() {
+  const store = await cookies();
   store.set('session_id', '', { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 0 });
 }
 
