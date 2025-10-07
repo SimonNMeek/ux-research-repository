@@ -287,7 +287,13 @@ export default function Header() {
               <p className="text-xs text-gray-500 dark:text-gray-400">{user?.email || 'Loading...'}</p>
             </div>
             
-            <button className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center">
+            <button 
+              onClick={() => {
+                setDropdownOpen(false);
+                router.push('/profile');
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+            >
               <User className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
               Profile
             </button>
