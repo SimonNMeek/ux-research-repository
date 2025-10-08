@@ -1,6 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from 'react';
-import { User, Settings, CreditCard, LogOut, ChevronDown, Building2, Moon, Sun, Plus } from 'lucide-react';
+import { User, Settings, CreditCard, LogOut, ChevronDown, Building2, Moon, Sun, Plus, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useRouter, usePathname } from 'next/navigation';
 import { useDarkMode } from '@/hooks/useDarkMode';
@@ -11,6 +11,7 @@ interface AuthUser {
   email: string;
   name: string;
   is_active: number;
+  system_role?: string;
 }
 
 interface Workspace {
@@ -307,6 +308,23 @@ export default function Header() {
               <CreditCard className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
               Accounts & Billing
             </button>
+            
+            {/* Admin Section */}
+            {(user?.system_role === 'super_admin' || user?.system_role === 'admin') && (
+              <>
+                <div className="border-t border-gray-100 dark:border-gray-700 my-1"></div>
+                <button 
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    router.push('/admin/users');
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                >
+                  <Shield className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
+                  User Management
+                </button>
+              </>
+            )}
             
             <div className="border-t border-gray-100 dark:border-gray-700 my-1"></div>
             

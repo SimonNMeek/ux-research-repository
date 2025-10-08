@@ -5,17 +5,28 @@ export type User = {
   id: number;
   email: string;
   name: string;
+  first_name?: string;
+  last_name?: string;
   is_active: number;
+  system_role?: string;
 };
 
 export async function authenticateUser(email: string, password: string): Promise<User | null> {
   const db = getDb();
-  const row = db.prepare(`SELECT id, email, name, is_active, password_hash FROM users WHERE email = ? AND is_active = 1`).get(email) as (User & { password_hash: string }) | undefined;
+  const row = db.prepare(`SELECT id, email, name, first_name, last_name, is_active, system_role, password_hash FROM users WHERE email = ? AND is_active = 1`).get(email) as (User & { password_hash: string }) | undefined;
   if (!row) return null;
   // Minimal check: password equals stored password_hash (seeded as plain for demo)
   if (password !== row.password_hash) return null;
   db.prepare(`UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?`).run(row.id);
-  return { id: row.id, email: row.email, name: row.name, is_active: row.is_active };
+  return { 
+    id: row.id, 
+    email: row.email, 
+    name: row.name, 
+    first_name: row.first_name,
+    last_name: row.last_name,
+    is_active: row.is_active,
+    system_role: row.system_role 
+  };
 }
 
 export function createSession(userId: number): { id: string; expiresAt: string } {
@@ -30,7 +41,7 @@ export function validateSession(sessionId: string | undefined): User | null {
   if (!sessionId) return null;
   const db = getDb();
   const row = db.prepare(
-    `SELECT u.id, u.email, u.name, u.is_active
+    `SELECT u.id, u.email, u.name, u.first_name, u.last_name, u.is_active, u.system_role
      FROM user_sessions s JOIN users u ON s.user_id = u.id
      WHERE s.id = ? AND s.expires_at > CURRENT_TIMESTAMP`
   ).get(sessionId) as User | undefined;
