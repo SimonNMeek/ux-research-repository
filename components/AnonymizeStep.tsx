@@ -70,7 +70,7 @@ const DEFAULT_ENTITIES = {
 const ENTITY_LABELS: Record<string, string> = {
   PERSON: 'Person Names',
   SINGLE_NAME: 'Single Names',
-  ORG: 'Organizations',
+  ORG: 'Organisations',
   EMAIL: 'Email Addresses',
   PHONE: 'Phone Numbers',
   CARD: 'Credit Cards',
@@ -236,7 +236,7 @@ export default function AnonymizeStep({ files, onConfigChange, onPreview }: Anon
             </div>
           </div>
           <div>
-            <h4 className="font-semibold mb-2 text-green-600 dark:text-green-400">Anonymized</h4>
+            <h4 className="font-semibold mb-2 text-green-600 dark:text-green-400">Anonymised</h4>
             <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded text-sm text-gray-900 dark:text-gray-100">
               {anonymizedText}
             </div>
@@ -264,14 +264,14 @@ export default function AnonymizeStep({ files, onConfigChange, onPreview }: Anon
           className="border-gray-300 dark:border-gray-600"
         />
         <Label htmlFor="anonymize" className="text-sm font-medium text-gray-900 dark:text-gray-100">
-          Anonymize on import
+          Anonymise on import
         </Label>
       </div>
 
       {enabled && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg text-gray-900 dark:text-gray-100">Anonymization Settings</CardTitle>
+            <CardTitle className="text-lg text-gray-900 dark:text-gray-100">Anonymisation Settings</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <Tabs defaultValue="entities" className="w-full">
@@ -320,9 +320,9 @@ export default function AnonymizeStep({ files, onConfigChange, onPreview }: Anon
               <TabsContent value="preview" className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="font-semibold text-gray-900 dark:text-gray-100">Preview Anonymization</h4>
+                    <h4 className="font-semibold text-gray-900 dark:text-gray-100">Preview Anonymisation</h4>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Preview how the first file will be anonymized
+                      Preview how the first file will be anonymised
                     </p>
                   </div>
                   <Button

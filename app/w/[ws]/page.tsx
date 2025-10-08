@@ -320,7 +320,7 @@ export default function WorkspaceDashboard() {
           <div className="mb-8">
             <h1 className="text-4xl font-bold mb-2">{workspace.name}</h1>
             <p className="text-gray-600">
-              {projects.length} {projects.length === 1 ? 'project' : 'projects'} • {favoriteDocuments.length} favorite documents
+              {projects.length} {projects.length === 1 ? 'project' : 'projects'} • {favoriteDocuments.length} favourite documents
             </p>
           </div>
 
@@ -516,7 +516,7 @@ export default function WorkspaceDashboard() {
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
                 <FolderOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No projects yet</h3>
-                <p className="text-gray-600 mb-4">Create your first project to start organizing your research documents.</p>
+                <p className="text-gray-600 mb-4">Create your first project to start organising your research documents.</p>
                 <Button onClick={() => setCreateProjectOpen(true)} className="flex items-center gap-2">
                   <Plus className="w-4 h-4" />
                   Create Project
@@ -557,7 +557,7 @@ export default function WorkspaceDashboard() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold flex items-center gap-2">
                 <Heart className="w-5 h-5 text-red-500" />
-                Favorites
+                Favourites
               </h2>
               <span className="text-sm text-gray-500 dark:text-gray-400">{favoriteDocuments.length} total</span>
             </div>
@@ -565,7 +565,7 @@ export default function WorkspaceDashboard() {
             {favoriteDocuments.length === 0 ? (
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 text-center">
                 <Star className="w-8 h-8 text-gray-400 mx-auto mb-3" />
-                <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-2">No favorites yet</h3>
+                <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-2">No favourites yet</h3>
                 <p className="text-sm text-gray-600">Star documents to see them here for quick access.</p>
               </div>
             ) : (
@@ -601,7 +601,7 @@ export default function WorkspaceDashboard() {
                     className="w-full"
                     onClick={navigateToSearch}
                   >
-                    View All Favorites
+                    View All Favourites
                   </Button>
                 )}
               </div>

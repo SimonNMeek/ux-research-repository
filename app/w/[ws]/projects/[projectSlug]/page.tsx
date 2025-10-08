@@ -766,7 +766,7 @@ export default function ProjectPage() {
               <SelectContent>
                 <SelectItem value="date-newest">Date (newest first)</SelectItem>
                 <SelectItem value="date-oldest">Date (oldest first)</SelectItem>
-                <SelectItem value="favorites-first">Favorites first</SelectItem>
+                <SelectItem value="favorites-first">Favourites first</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -60,7 +60,7 @@ const researchQuotes = [
     author: ""
   },
   {
-    text: "The future belongs to organizations that make listening their strongest capability.",
+    text: "The future belongs to organisations that make listening their strongest capability.",
     author: ""
   },
   {
