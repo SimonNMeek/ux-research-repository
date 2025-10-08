@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { WorkspaceRepo } from './repo/workspace';
+import { getSessionCookie, validateSession, User } from '@/lib/auth';
 
 export interface WorkspaceContext {
   workspace: {
@@ -7,6 +8,7 @@ export interface WorkspaceContext {
     slug: string;
     name: string;
   };
+  user: User | null;
 }
 
 export class WorkspaceResolver {
@@ -28,12 +30,17 @@ export class WorkspaceResolver {
       throw new Error(`Workspace '${workspaceSlug}' not found`);
     }
 
+    // Get authenticated user
+    const sessionId = await getSessionCookie();
+    const user = sessionId ? validateSession(sessionId) : null;
+
     return {
       workspace: {
         id: workspace.id,
         slug: workspace.slug,
         name: workspace.name
-      }
+      },
+      user
     };
   }
 

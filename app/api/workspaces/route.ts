@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/db/index';
+import { getSessionCookie, validateSession } from '@/lib/auth';
+import { canCreateWorkspace, getPermissionErrorMessage, PERMISSIONS } from '@/lib/permissions';
 
 export async function GET() {
   try {
@@ -24,6 +26,25 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    // Check authentication
+    const sessionId = await getSessionCookie();
+    if (!sessionId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const user = validateSession(sessionId);
+    if (!user) {
+      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
+    }
+
+    // Check permissions
+    if (!canCreateWorkspace(user)) {
+      return NextResponse.json(
+        { error: getPermissionErrorMessage(PERMISSIONS.CREATE_WORKSPACE) },
+        { status: 403 }
+      );
+    }
+
     const { name, slug, description } = await request.json();
 
     if (!name || !slug) {

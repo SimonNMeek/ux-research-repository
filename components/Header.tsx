@@ -206,15 +206,19 @@ export default function Header() {
               
               <div className="border-t border-gray-100 dark:border-gray-700 my-1"></div>
               
-              <CreateWorkspaceModal 
-                onWorkspaceCreated={handleWorkspaceCreated}
-                className="w-full justify-start text-left px-4 py-2 h-auto font-normal"
-              >
-                <button className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center">
+              {/* Only show Create Workspace for admins */}
+              {(user?.system_role === 'super_admin' || user?.system_role === 'admin') && (
+                <button
+                  onClick={() => {
+                    setWorkspaceDropdownOpen(false);
+                    setCreateWorkspaceOpen(true);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                >
                   <Plus className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
                   Create Workspace
                 </button>
-              </CreateWorkspaceModal>
+              )}
               
               <button
                 onClick={() => {
@@ -225,17 +229,6 @@ export default function Header() {
               >
                 <Building2 className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
                 All Workspaces
-              </button>
-              
-              <button
-                onClick={() => {
-                  setWorkspaceDropdownOpen(false);
-                  setCreateWorkspaceOpen(true);
-                }}
-                className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
-              >
-                <Plus className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
-                Create Workspace
               </button>
             </div>
           )}

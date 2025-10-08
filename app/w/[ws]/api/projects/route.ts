@@ -1,13 +1,14 @@
 import { NextRequest } from 'next/server';
 import { withWorkspace, WorkspaceRouteHandler } from '../../../../../src/server/workspace-resolver';
 import { ProjectRepo } from '../../../../../src/server/repo/project';
+import { canCreateProject, getPermissionErrorMessage, PERMISSIONS } from '@/lib/permissions';
 
 export const runtime = 'nodejs';
 
 const projectRepo = new ProjectRepo();
 
 const handler: WorkspaceRouteHandler = async (context, req) => {
-  const { workspace } = context;
+  const { workspace, user } = context;
 
   if (req.method === 'GET') {
     try {
@@ -28,6 +29,22 @@ const handler: WorkspaceRouteHandler = async (context, req) => {
   }
 
   if (req.method === 'POST') {
+    // Check authentication
+    if (!user) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { 'content-type': 'application/json' } }
+      );
+    }
+
+    // Check permissions
+    if (!canCreateProject(user)) {
+      return new Response(
+        JSON.stringify({ error: getPermissionErrorMessage(PERMISSIONS.CREATE_PROJECT) }),
+        { status: 403, headers: { 'content-type': 'application/json' } }
+      );
+    }
+
     try {
       const body = await req.json();
       const { slug, name, description } = body;

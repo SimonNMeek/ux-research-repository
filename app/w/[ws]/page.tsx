@@ -66,6 +66,13 @@ interface Document {
   tags: string[];
 }
 
+interface User {
+  id: number;
+  email: string;
+  name: string;
+  system_role?: string;
+}
+
 export default function WorkspaceDashboard() {
   const params = useParams();
   const router = useRouter();
@@ -74,6 +81,7 @@ export default function WorkspaceDashboard() {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [favoriteDocuments, setFavoriteDocuments] = useState<FavoriteDocument[]>([]);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -95,6 +103,22 @@ export default function WorkspaceDashboard() {
   const [viewingDocument, setViewingDocument] = useState<{ open: boolean; document: Document | null; loading: boolean }>({ 
     open: false, document: null, loading: false 
   });
+
+  // Load user data
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const response = await fetch('/api/auth/me');
+        if (response.ok) {
+          const data = await response.json();
+          setUser(data.user);
+        }
+      } catch (err) {
+        console.error('Failed to load user:', err);
+      }
+    };
+    loadUser();
+  }, []);
 
   // Load workspace data
   useEffect(() => {
@@ -449,15 +473,16 @@ export default function WorkspaceDashboard() {
           </div>
         )}
 
-        {/* Quick Actions */}
-        <div className="flex gap-4 mb-8">
-          <Dialog open={createProjectOpen} onOpenChange={setCreateProjectOpen}>
-            <DialogTrigger asChild>
-              <Button className="flex items-center gap-2">
-                <Plus className="w-4 h-4" />
-                New Project
-              </Button>
-            </DialogTrigger>
+        {/* Quick Actions - Only show for admins */}
+        {(user?.system_role === 'super_admin' || user?.system_role === 'admin') && (
+          <div className="flex gap-4 mb-8">
+            <Dialog open={createProjectOpen} onOpenChange={setCreateProjectOpen}>
+              <DialogTrigger asChild>
+                <Button className="flex items-center gap-2">
+                  <Plus className="w-4 h-4" />
+                  New Project
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Create New Project</DialogTitle>
@@ -502,7 +527,8 @@ export default function WorkspaceDashboard() {
               </div>
             </DialogContent>
           </Dialog>
-        </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Projects Section */}
@@ -516,11 +542,17 @@ export default function WorkspaceDashboard() {
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
                 <FolderOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No projects yet</h3>
-                <p className="text-gray-600 mb-4">Create your first project to start organising your research documents.</p>
-                <Button onClick={() => setCreateProjectOpen(true)} className="flex items-center gap-2">
-                  <Plus className="w-4 h-4" />
-                  Create Project
-                </Button>
+                <p className="text-gray-600 dark:text-gray-400 mb-4">
+                  {(user?.system_role === 'super_admin' || user?.system_role === 'admin') 
+                    ? 'Create your first project to start organising your research documents.' 
+                    : 'No projects have been created in this workspace yet. Contact an admin to create one.'}
+                </p>
+                {(user?.system_role === 'super_admin' || user?.system_role === 'admin') && (
+                  <Button onClick={() => setCreateProjectOpen(true)} className="flex items-center gap-2">
+                    <Plus className="w-4 h-4" />
+                    Create Project
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
