@@ -262,10 +262,20 @@ export default function WorkspaceDashboard() {
     
     setCreating(true);
     try {
+      // Auto-generate slug from project name
+      const slug = newProjectName
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+        .replace(/\s+/g, '-') // Replace spaces with hyphens
+        .replace(/-+/g, '-') // Replace multiple hyphens with single
+        .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
+
       const response = await fetch(`/w/${workspaceSlug}/api/projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          slug: slug,
           name: newProjectName.trim(),
           description: newProjectDescription.trim()
         })
