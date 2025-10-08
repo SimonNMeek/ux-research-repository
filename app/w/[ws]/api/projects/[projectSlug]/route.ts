@@ -1,45 +1,67 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { resolveWorkspace } from '@/src/server/workspace-resolver';
-import { ProjectRepo } from '@/src/server/repo/project';
+import { NextRequest } from 'next/server';
+import { withWorkspace, WorkspaceRouteHandler } from '../../../../../../src/server/workspace-resolver';
+import { ProjectRepo } from '../../../../../../src/server/repo/project';
+import { getDb } from '@/db';
+
+export const runtime = 'nodejs';
 
 const projectRepo = new ProjectRepo();
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { ws: string; projectSlug: string } }
-) {
-  try {
-    const resolved = params instanceof Promise ? await params : params;
-    const workspaceId = await resolveWorkspace(resolved.ws);
-    const project = projectRepo.getBySlug(workspaceId, resolved.projectSlug);
-    
-    if (!project) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+const handler: WorkspaceRouteHandler = async (context, req, routeParams) => {
+  const { workspace, user } = context;
+  
+  // Extract projectSlug from params
+  const params = routeParams.params instanceof Promise ? await routeParams.params : routeParams.params;
+  const projectSlug = params.projectSlug;
+
+  if (req.method === 'DELETE') {
+    // Only super_admins can delete projects
+    if (!user || user.system_role !== 'super_admin') {
+      return new Response(
+        JSON.stringify({ error: 'Only Super Admins can delete projects' }),
+        { status: 403, headers: { 'content-type': 'application/json' } }
+      );
     }
 
-    const body = await req.json();
-    const { name, description } = body;
+    try {
+      // Get the project to ensure it exists and belongs to this workspace
+      const project = projectRepo.getBySlug(workspace.id, projectSlug);
+      if (!project) {
+        return new Response(
+          JSON.stringify({ error: 'Project not found' }),
+          { status: 404, headers: { 'content-type': 'application/json' } }
+        );
+      }
 
-    if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return NextResponse.json({ error: 'Project name is required' }, { status: 400 });
+      // Delete all documents in the project first
+      const db = getDb();
+      db.prepare(`DELETE FROM documents WHERE project_id = ?`).run(project.id);
+
+      // Delete the project
+      db.prepare(`DELETE FROM projects WHERE id = ?`).run(project.id);
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'Project and all associated documents deleted successfully' 
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    } catch (error: any) {
+      console.error('Error deleting project:', error);
+      return new Response(
+        JSON.stringify({ error: error.message || 'Failed to delete project' }),
+        { status: 500, headers: { 'content-type': 'application/json' } }
+      );
     }
-
-    const success = projectRepo.update(project.id, {
-      name: name.trim(),
-      description: description?.trim() || null
-    });
-
-    if (!success) {
-      return NextResponse.json({ error: 'Failed to update project' }, { status: 500 });
-    }
-
-    // Return updated project data
-    const updatedProject = projectRepo.getById(project.id);
-    return NextResponse.json({ 
-      project: updatedProject,
-      message: 'Project updated successfully' 
-    }, { status: 200 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  return new Response(
+    JSON.stringify({ error: 'Method not allowed' }),
+    { status: 405, headers: { 'content-type': 'application/json' } }
+  );
+};
+
+export async function DELETE(req: NextRequest, params: { params: { ws: string; projectSlug: string } | Promise<{ ws: string; projectSlug: string }> }) {
+  return withWorkspace(handler, req, params);
 }

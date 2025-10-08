@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Plus, Heart, Search, FolderOpen, Calendar, Star, Filter, Eye } from 'lucide-react';
+import { Plus, Heart, Search, FolderOpen, Calendar, Star, Filter, Eye, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,7 @@ interface Project {
   name: string;
   description: string;
   created_at: string;
+  document_count?: number;
 }
 
 interface FavoriteDocument {
@@ -90,6 +91,13 @@ export default function WorkspaceDashboard() {
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
   const [creating, setCreating] = useState(false);
+  
+  // Project deletion state
+  const [deleteProjectDialog, setDeleteProjectDialog] = useState<{ open: boolean; project: Project | null }>({ 
+    open: false, 
+    project: null 
+  });
+  const [deleting, setDeleting] = useState(false);
 
   // Search state
   const [query, setQuery] = useState('');
@@ -300,6 +308,30 @@ export default function WorkspaceDashboard() {
 
   const navigateToProject = (projectSlug: string) => {
     router.push(`/w/${workspaceSlug}/projects/${projectSlug}`);
+  };
+
+  const handleDeleteProject = async () => {
+    if (!deleteProjectDialog.project) return;
+    
+    setDeleting(true);
+    try {
+      const response = await fetch(`/w/${workspaceSlug}/api/projects/${deleteProjectDialog.project.slug}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete project');
+      }
+
+      // Remove project from state
+      setProjects(prev => prev.filter(p => p.slug !== deleteProjectDialog.project!.slug));
+      setDeleteProjectDialog({ open: false, project: null });
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (error) {
@@ -569,25 +601,55 @@ export default function WorkspaceDashboard() {
                 {projects.map(project => (
                   <div 
                     key={project.slug} 
-                    className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow cursor-pointer"
-                    onClick={() => navigateToProject(project.slug)}
+                    className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow group relative"
                   >
-                    <div className="flex items-start justify-between mb-3">
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex-1">{project.name}</h3>
-                      <FolderOpen className="w-5 h-5 text-gray-400 ml-2 flex-shrink-0" />
-                    </div>
-                    
-                    {project.description && (
-                      <p className="text-gray-600 text-sm mb-3 line-clamp-2">{project.description}</p>
-                    )}
-                    
-                    <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        <span>Created {new Date(project.created_at).toLocaleDateString()}</span>
+                    <div 
+                      className="cursor-pointer"
+                      onClick={() => navigateToProject(project.slug)}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex-1">{project.name}</h3>
+                        <FolderOpen className="w-5 h-5 text-gray-400 ml-2 flex-shrink-0" />
                       </div>
-                      <span className="bg-gray-100 px-2 py-1 rounded text-xs">{project.slug}</span>
+                      
+                      {project.description && (
+                        <p className="text-gray-600 dark:text-gray-400 text-sm mb-3 line-clamp-2">{project.description}</p>
+                      )}
+                      
+                      <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-2">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          <span>Created {new Date(project.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs">{project.slug}</span>
+                      </div>
+
+                      {/* Document count */}
+                      {typeof project.document_count !== 'undefined' && (
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {project.document_count} {project.document_count === 1 ? 'document' : 'documents'}
+                        </div>
+                      )}
                     </div>
+
+                    {/* Delete button for super-admins */}
+                    {user?.system_role === 'super_admin' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteProjectDialog({ open: true, project });
+                        }}
+                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 6h18"></path>
+                          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                        </svg>
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -678,6 +740,57 @@ export default function WorkspaceDashboard() {
               ) : (
                 <p className="text-gray-500 dark:text-gray-400">Failed to load document</p>
               )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Project Confirmation Dialog */}
+        <Dialog 
+          open={deleteProjectDialog.open} 
+          onOpenChange={(open) => setDeleteProjectDialog({ open, project: deleteProjectDialog.project })}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="text-red-600 dark:text-red-400">Delete Project</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-gray-900 dark:text-gray-100 mb-4">
+                Are you sure you want to delete the project <strong>"{deleteProjectDialog.project?.name}"</strong>?
+              </p>
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
+                <p className="text-sm text-red-800 dark:text-red-200">
+                  <strong>Warning:</strong> This action cannot be undone. All documents in this project will be permanently deleted.
+                </p>
+                {deleteProjectDialog.project?.document_count !== undefined && deleteProjectDialog.project.document_count > 0 && (
+                  <p className="text-sm text-red-800 dark:text-red-200 mt-2">
+                    This will delete <strong>{deleteProjectDialog.project.document_count}</strong> {deleteProjectDialog.project.document_count === 1 ? 'document' : 'documents'}.
+                  </p>
+                )}
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setDeleteProjectDialog({ open: false, project: null })}
+                  disabled={deleting}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant="destructive"
+                  onClick={handleDeleteProject}
+                  disabled={deleting}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  {deleting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    'Delete Project'
+                  )}
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
