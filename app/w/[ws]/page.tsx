@@ -607,9 +607,9 @@ export default function WorkspaceDashboard() {
                       className="cursor-pointer"
                       onClick={() => navigateToProject(project.slug)}
                     >
-                      <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-start mb-3">
+                        <FolderOpen className="w-5 h-5 text-gray-400 mr-2 flex-shrink-0 mt-0.5" />
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex-1">{project.name}</h3>
-                        <FolderOpen className="w-5 h-5 text-gray-400 ml-2 flex-shrink-0" />
                       </div>
                       
                       {project.description && (
