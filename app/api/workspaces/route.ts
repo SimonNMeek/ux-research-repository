@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/db/index';
+import { getDbAdapter, getDbType } from '@/db/adapter';
 import { getSessionCookie, validateSession } from '@/lib/auth';
 import { canCreateWorkspace, getPermissionErrorMessage, PERMISSIONS } from '@/lib/permissions';
 
@@ -86,12 +87,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const db = getDb();
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
 
     // Verify user has access to organization
-    const orgAccess = db
-      .prepare(`SELECT role FROM user_organizations WHERE user_id = ? AND organization_id = ?`)
-      .get(user.id, organizationId) as { role: string } | undefined;
+    let orgAccess: { role: string } | undefined;
+    if (dbType === 'postgres') {
+      const result = await adapter.query(`SELECT role FROM user_organizations WHERE user_id = $1 AND organization_id = $2`, [user.id, organizationId]);
+      orgAccess = result.rows[0] as { role: string } | undefined;
+    } else {
+      const db = getDb();
+      orgAccess = db.prepare(`SELECT role FROM user_organizations WHERE user_id = ? AND organization_id = ?`).get(user.id, organizationId) as { role: string } | undefined;
+    }
 
     if (!orgAccess && user.system_role !== 'super_admin') {
       return NextResponse.json(
@@ -101,9 +108,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Check organization limits
-    const org = db
-      .prepare(`SELECT * FROM organizations WHERE id = ?`)
-      .get(organizationId) as any;
+    let org: any;
+    if (dbType === 'postgres') {
+      const result = await adapter.query(`SELECT * FROM organizations WHERE id = $1`, [organizationId]);
+      org = result.rows[0];
+    } else {
+      const db = getDb();
+      org = db.prepare(`SELECT * FROM organizations WHERE id = ?`).get(organizationId);
+    }
 
     if (!org) {
       return NextResponse.json(
@@ -112,9 +124,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const workspaceCount = db
-      .prepare(`SELECT COUNT(*) as count FROM workspaces WHERE organization_id = ?`)
-      .get(organizationId) as { count: number };
+    let workspaceCount: { count: number };
+    if (dbType === 'postgres') {
+      const result = await adapter.query(`SELECT COUNT(*) as count FROM workspaces WHERE organization_id = $1`, [organizationId]);
+      workspaceCount = result.rows[0] as { count: number };
+    } else {
+      const db = getDb();
+      workspaceCount = db.prepare(`SELECT COUNT(*) as count FROM workspaces WHERE organization_id = ?`).get(organizationId) as { count: number };
+    }
 
     if (workspaceCount.count >= org.max_workspaces) {
       return NextResponse.json(
@@ -133,9 +150,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if slug already exists within the organization
-    const existing = db
-      .prepare(`SELECT id FROM workspaces WHERE slug = ? AND organization_id = ?`)
-      .get(slug, organizationId);
+    let existing: any;
+    if (dbType === 'postgres') {
+      const result = await adapter.query(`SELECT id FROM workspaces WHERE slug = $1 AND organization_id = $2`, [slug, organizationId]);
+      existing = result.rows[0];
+    } else {
+      const db = getDb();
+      existing = db.prepare(`SELECT id FROM workspaces WHERE slug = ? AND organization_id = ?`).get(slug, organizationId);
+    }
 
     if (existing) {
       return NextResponse.json(
@@ -145,21 +167,42 @@ export async function POST(request: NextRequest) {
     }
 
     // Create workspace (store description in metadata JSON)
-    const result = db.prepare(
-      `INSERT INTO workspaces (slug, name, organization_id, metadata) VALUES (?, ?, ?, ?)`
-    ).run(slug, name, organizationId, JSON.stringify({ description: description || '' }));
-
-    const workspaceId = result.lastInsertRowid;
+    let workspaceId: number;
+    if (dbType === 'postgres') {
+      const result = await adapter.query(
+        `INSERT INTO workspaces (slug, name, organization_id, metadata) VALUES ($1, $2, $3, $4) RETURNING id`,
+        [slug, name, organizationId, JSON.stringify({ description: description || '' })]
+      );
+      workspaceId = result.rows[0].id;
+    } else {
+      const db = getDb();
+      const result = db.prepare(
+        `INSERT INTO workspaces (slug, name, organization_id, metadata) VALUES (?, ?, ?, ?)`
+      ).run(slug, name, organizationId, JSON.stringify({ description: description || '' }));
+      workspaceId = result.lastInsertRowid;
+    }
 
     // CRITICAL: Auto-grant creator as owner in user_workspaces
-    db.prepare(
-      `INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by)
-       VALUES (?, ?, 'owner', ?)`
-    ).run(user.id, workspaceId, user.id);
+    if (dbType === 'postgres') {
+      await adapter.query(
+        `INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by) VALUES ($1, $2, 'owner', $3)`,
+        [user.id, workspaceId, user.id]
+      );
+    } else {
+      const db = getDb();
+      db.prepare(
+        `INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by) VALUES (?, ?, 'owner', ?)`
+      ).run(user.id, workspaceId, user.id);
+    }
 
-    const newWorkspace = db
-      .prepare(`SELECT id, name, slug, created_at FROM workspaces WHERE id = ?`)
-      .get(workspaceId);
+    let newWorkspace: any;
+    if (dbType === 'postgres') {
+      const result = await adapter.query(`SELECT id, name, slug, created_at FROM workspaces WHERE id = $1`, [workspaceId]);
+      newWorkspace = result.rows[0];
+    } else {
+      const db = getDb();
+      newWorkspace = db.prepare(`SELECT id, name, slug, created_at FROM workspaces WHERE id = ?`).get(workspaceId);
+    }
 
     return NextResponse.json({ workspace: newWorkspace }, { status: 201 });
   } catch (error: any) {
