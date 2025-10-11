@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/db';
+import { getDbAdapter, getDbType } from '@/db/adapter';
 import { hashPassword } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
@@ -31,12 +31,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const db = getDb();
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
 
     // Check if user already exists
-    const existingUser = db
-      .prepare('SELECT id FROM users WHERE email = ?')
-      .get(email);
+    let existingUser;
+    if (dbType === 'postgres') {
+      const result = await adapter.query('SELECT id FROM users WHERE email = $1', [email]);
+      existingUser = result.rows[0];
+    } else {
+      const stmt = adapter.prepare('SELECT id FROM users WHERE email = ?');
+      existingUser = stmt.get([email]);
+    }
 
     if (existingUser) {
       return NextResponse.json(
@@ -50,44 +56,84 @@ export async function POST(request: NextRequest) {
     const fullName = `${firstName} ${lastName}`.trim();
 
     // Insert new user with 'contributor' role by default
-    const result = db
-      .prepare(
+    let userId;
+    if (dbType === 'postgres') {
+      const result = await adapter.query(
+        `INSERT INTO users (email, name, first_name, last_name, password_hash, system_role)
+         VALUES ($1, $2, $3, $4, $5, 'contributor') RETURNING id`,
+        [email, fullName, firstName, lastName, passwordHash]
+      );
+      userId = result.rows[0].id;
+    } else {
+      const stmt = adapter.prepare(
         `INSERT INTO users (email, name, first_name, last_name, password_hash, system_role)
          VALUES (?, ?, ?, ?, ?, 'contributor')`
-      )
-      .run(email, fullName, firstName, lastName, passwordHash);
-
-    const userId = result.lastInsertRowid;
+      );
+      const result = stmt.run([email, fullName, firstName, lastName, passwordHash]);
+      userId = result.lastInsertRowid;
+    }
 
     // Create a default organization for new users
     // This gives them their own isolated tenant space
     const orgSlug = `${email.split('@')[0]}-${userId}`.toLowerCase().replace(/[^a-z0-9-]/g, '-');
     const orgName = `${firstName}'s Organization`;
     
-    const orgResult = db
-      .prepare(`INSERT INTO organizations (slug, name, billing_email, plan) VALUES (?, ?, ?, 'free')`)
-      .run(orgSlug, orgName, email);
-    
-    const organizationId = orgResult.lastInsertRowid;
+    let organizationId;
+    if (dbType === 'postgres') {
+      const orgResult = await adapter.query(
+        `INSERT INTO organizations (slug, name, billing_email, plan) VALUES ($1, $2, $3, 'free') RETURNING id`,
+        [orgSlug, orgName, email]
+      );
+      organizationId = orgResult.rows[0].id;
+    } else {
+      const orgStmt = adapter.prepare(`INSERT INTO organizations (slug, name, billing_email, plan) VALUES (?, ?, ?, 'free')`);
+      const orgResult = orgStmt.run([orgSlug, orgName, email]);
+      organizationId = orgResult.lastInsertRowid;
+    }
 
     // Grant user as owner of their organization
-    db.prepare(
-      `INSERT INTO user_organizations (user_id, organization_id, role, invited_by)
-       VALUES (?, ?, 'owner', ?)`
-    ).run(userId, organizationId, userId);
+    if (dbType === 'postgres') {
+      await adapter.query(
+        `INSERT INTO user_organizations (user_id, organization_id, role, invited_by)
+         VALUES ($1, $2, 'owner', $3)`,
+        [userId, organizationId, userId]
+      );
+    } else {
+      const stmt = adapter.prepare(
+        `INSERT INTO user_organizations (user_id, organization_id, role, invited_by)
+         VALUES (?, ?, 'owner', ?)`
+      );
+      stmt.run([userId, organizationId, userId]);
+    }
 
     // Create a default workspace within the organization
-    const workspaceResult = db
-      .prepare(`INSERT INTO workspaces (slug, name, organization_id, metadata) VALUES (?, ?, ?, ?)`)
-      .run('my-workspace', 'My Workspace', organizationId, JSON.stringify({ description: 'Your first workspace' }));
-    
-    const workspaceId = workspaceResult.lastInsertRowid;
+    let workspaceId;
+    if (dbType === 'postgres') {
+      const workspaceResult = await adapter.query(
+        `INSERT INTO workspaces (slug, name, organization_id, metadata) VALUES ($1, $2, $3, $4) RETURNING id`,
+        ['my-workspace', 'My Workspace', organizationId, JSON.stringify({ description: 'Your first workspace' })]
+      );
+      workspaceId = workspaceResult.rows[0].id;
+    } else {
+      const workspaceStmt = adapter.prepare(`INSERT INTO workspaces (slug, name, organization_id, metadata) VALUES (?, ?, ?, ?)`);
+      const workspaceResult = workspaceStmt.run(['my-workspace', 'My Workspace', organizationId, JSON.stringify({ description: 'Your first workspace' })]);
+      workspaceId = workspaceResult.lastInsertRowid;
+    }
 
     // Grant user access to the workspace
-    db.prepare(
-      `INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by)
-       VALUES (?, ?, 'owner', ?)`
-    ).run(userId, workspaceId, userId);
+    if (dbType === 'postgres') {
+      await adapter.query(
+        `INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by)
+         VALUES ($1, $2, 'owner', $3)`,
+        [userId, workspaceId, userId]
+      );
+    } else {
+      const stmt = adapter.prepare(
+        `INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by)
+         VALUES (?, ?, 'owner', ?)`
+      );
+      stmt.run([userId, workspaceId, userId]);
+    }
 
     return NextResponse.json(
       {

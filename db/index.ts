@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
+import { getDbType, getDbAdapter } from './adapter';
 
 const projectRoot = process.cwd();
 const dbDir = path.join(projectRoot, 'db');
@@ -56,6 +57,11 @@ function runMigrations(db: Database.Database) {
 }
 
 export function getDb(): Database.Database {
+  // If DATABASE_URL is set, we should use PostgreSQL instead
+  if (process.env.DATABASE_URL) {
+    throw new Error('getDb() should not be called when DATABASE_URL is set. Use getDbAdapter() instead.');
+  }
+
   if (database) return database;
 
   if (!fs.existsSync(dbDir)) {
