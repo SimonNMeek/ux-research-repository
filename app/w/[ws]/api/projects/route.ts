@@ -4,15 +4,14 @@ import { ProjectRepo } from '../../../../../src/server/repo/project';
 
 export const runtime = 'nodejs';
 
-const projectRepo = new ProjectRepo();
-
 const handler: WorkspaceRouteHandler = async (context, req) => {
   const { workspace, user } = context;
 
   if (req.method === 'GET') {
     // All authenticated workspace members can view projects
     try {
-      const projects = projectRepo.listByWorkspaceWithDocumentCounts(workspace.id);
+      const projectRepo = new ProjectRepo();
+      const projects = await projectRepo.listByWorkspaceWithDocumentCounts(workspace.id);
       return new Response(
         JSON.stringify({ projects }),
         {
@@ -56,6 +55,8 @@ const handler: WorkspaceRouteHandler = async (context, req) => {
         );
       }
 
+      const projectRepo = new ProjectRepo();
+      
       // Check if project with this slug already exists
       const existing = projectRepo.getBySlug(workspace.id, slug);
       if (existing) {

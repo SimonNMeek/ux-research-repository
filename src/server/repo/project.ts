@@ -16,20 +16,56 @@ export class ProjectRepo {
     return getDb();
   }
 
-  listByWorkspace(workspaceId: number): Project[] {
-    const rows = this.getDbConnection()
-      .prepare('SELECT * FROM projects WHERE workspace_id = ? ORDER BY name')
-      .all(workspaceId) as any[];
+  async listByWorkspace(workspaceId: number): Promise<Project[]> {
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
     
-    return rows.map(row => ({
-      ...row,
-      metadata: JSON.parse(row.metadata || '{}')
-    }));
+    let rows: any[];
+    if (dbType === 'postgres') {
+      const result = await adapter.query('SELECT * FROM projects WHERE workspace_id = $1 ORDER BY name', [workspaceId]);
+      rows = result.rows;
+    } else {
+      const db = this.getDbConnection();
+      rows = db.prepare('SELECT * FROM projects WHERE workspace_id = ? ORDER BY name').all(workspaceId);
+    }
+    
+    return rows.map(row => {
+      // Handle metadata - PostgreSQL returns JSON objects, SQLite returns strings
+      let metadata = {};
+      if (row.metadata) {
+        if (typeof row.metadata === 'string') {
+          metadata = JSON.parse(row.metadata);
+        } else {
+          metadata = row.metadata;
+        }
+      }
+      
+      return {
+        ...row,
+        metadata
+      };
+    });
   }
 
-  listByWorkspaceWithDocumentCounts(workspaceId: number): (Project & { document_count: number })[] {
-    const rows = this.getDbConnection()
-      .prepare(`
+  async listByWorkspaceWithDocumentCounts(workspaceId: number): Promise<(Project & { document_count: number })[]> {
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
+    
+    let rows: any[];
+    if (dbType === 'postgres') {
+      const result = await adapter.query(`
+        SELECT p.*, 
+               COALESCE(COUNT(d.id), 0) as document_count
+        FROM projects p
+        LEFT JOIN documents d ON p.id = d.project_id
+        WHERE p.workspace_id = $1
+        GROUP BY p.id
+        ORDER BY p.name
+      `, [workspaceId]);
+      rows = result.rows;
+    } else {
+      const db = this.getDbConnection();
+      rows = db.prepare(`
         SELECT p.*, 
                COALESCE(COUNT(d.id), 0) as document_count
         FROM projects p
@@ -37,14 +73,26 @@ export class ProjectRepo {
         WHERE p.workspace_id = ?
         GROUP BY p.id
         ORDER BY p.name
-      `)
-      .all(workspaceId) as any[];
+      `).all(workspaceId);
+    }
     
-    return rows.map(row => ({
-      ...row,
-      document_count: row.document_count,
-      metadata: JSON.parse(row.metadata || '{}')
-    }));
+    return rows.map(row => {
+      // Handle metadata - PostgreSQL returns JSON objects, SQLite returns strings
+      let metadata = {};
+      if (row.metadata) {
+        if (typeof row.metadata === 'string') {
+          metadata = JSON.parse(row.metadata);
+        } else {
+          metadata = row.metadata;
+        }
+      }
+      
+      return {
+        ...row,
+        document_count: row.document_count,
+        metadata
+      };
+    });
   }
 
   getBySlug(workspaceId: number, slug: string): Project | null {
