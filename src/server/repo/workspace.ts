@@ -4,6 +4,7 @@ export interface Workspace {
   id: number;
   slug: string;
   name: string;
+  organization_id: number;
   created_at: string;
   metadata: Record<string, any>;
 }
@@ -35,12 +36,31 @@ export class WorkspaceRepo {
     }));
   }
 
-  create(data: { slug: string; name: string; metadata?: Record<string, any> }): Workspace {
+  /**
+   * List workspaces by organization
+   */
+  listByOrganization(organizationId: number): Workspace[] {
+    const rows = this.db
+      .prepare('SELECT * FROM workspaces WHERE organization_id = ? ORDER BY name')
+      .all(organizationId) as any[];
+    
+    return rows.map(row => ({
+      ...row,
+      metadata: JSON.parse(row.metadata || '{}')
+    }));
+  }
+
+  create(data: { 
+    slug: string; 
+    name: string; 
+    organization_id: number;
+    metadata?: Record<string, any> 
+  }): Workspace {
     const metadata = JSON.stringify(data.metadata || {});
     
     const result = this.db
-      .prepare('INSERT INTO workspaces (slug, name, metadata) VALUES (?, ?, ?) RETURNING *')
-      .get(data.slug, data.name, metadata) as any;
+      .prepare('INSERT INTO workspaces (slug, name, organization_id, metadata) VALUES (?, ?, ?, ?) RETURNING *')
+      .get(data.slug, data.name, data.organization_id, metadata) as any;
     
     return {
       ...result,

@@ -73,12 +73,49 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { name, slug, description } = await request.json();
+    const { name, slug, description, organizationId } = await request.json();
 
-    if (!name || !slug) {
+    if (!name || !slug || !organizationId) {
       return NextResponse.json(
-        { error: 'Name and slug are required' },
+        { error: 'Name, slug, and organizationId are required' },
         { status: 400 }
+      );
+    }
+
+    const db = getDb();
+
+    // Verify user has access to organization
+    const orgAccess = db
+      .prepare(`SELECT role FROM user_organizations WHERE user_id = ? AND organization_id = ?`)
+      .get(user.id, organizationId) as { role: string } | undefined;
+
+    if (!orgAccess && user.system_role !== 'super_admin') {
+      return NextResponse.json(
+        { error: 'You do not have access to this organization' },
+        { status: 403 }
+      );
+    }
+
+    // Check organization limits
+    const org = db
+      .prepare(`SELECT * FROM organizations WHERE id = ?`)
+      .get(organizationId) as any;
+
+    if (!org) {
+      return NextResponse.json(
+        { error: 'Organization not found' },
+        { status: 404 }
+      );
+    }
+
+    const workspaceCount = db
+      .prepare(`SELECT COUNT(*) as count FROM workspaces WHERE organization_id = ?`)
+      .get(organizationId) as { count: number };
+
+    if (workspaceCount.count >= org.max_workspaces) {
+      return NextResponse.json(
+        { error: `Organization has reached workspace limit (${org.max_workspaces}). Upgrade your plan to create more workspaces.` },
+        { status: 403 }
       );
     }
 
@@ -91,23 +128,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const db = getDb();
-    // Check if slug already exists
+    // Check if slug already exists within the organization
     const existing = db
-      .prepare(`SELECT id FROM workspaces WHERE slug = ?`)
-      .get(slug);
+      .prepare(`SELECT id FROM workspaces WHERE slug = ? AND organization_id = ?`)
+      .get(slug, organizationId);
 
     if (existing) {
       return NextResponse.json(
-        { error: 'Slug already exists' },
+        { error: 'Slug already exists in this organization' },
         { status: 409 }
       );
     }
 
     // Create workspace (store description in metadata JSON)
     const result = db.prepare(
-      `INSERT INTO workspaces (slug, name, metadata) VALUES (?, ?, ?)`
-    ).run(slug, name, JSON.stringify({ description: description || '' }));
+      `INSERT INTO workspaces (slug, name, organization_id, metadata) VALUES (?, ?, ?, ?)`
+    ).run(slug, name, organizationId, JSON.stringify({ description: description || '' }));
 
     const workspaceId = result.lastInsertRowid;
 

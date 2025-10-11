@@ -1,22 +1,31 @@
 import { NextRequest } from 'next/server';
 import { WorkspaceRepo } from './repo/workspace';
+import { OrganizationRepo } from './repo/organization';
 import { getSessionCookie, validateSession, User } from '@/lib/auth';
 
 export interface WorkspaceContext {
+  organization: {
+    id: number;
+    slug: string;
+    name: string;
+  };
   workspace: {
     id: number;
     slug: string;
     name: string;
   };
   user: User;
+  organizationRole: 'owner' | 'admin' | 'member';
   workspaceRole: 'owner' | 'admin' | 'member' | 'viewer';
 }
 
 export class WorkspaceResolver {
   private workspaceRepo = new WorkspaceRepo();
+  private organizationRepo = new OrganizationRepo();
 
   /**
    * Resolve workspace from URL params and validate access
+   * Now includes organization context for true multi-tenancy
    */
   async resolveFromParams(params: { ws: string } | Promise<{ ws: string }>): Promise<WorkspaceContext> {
     const resolved = params instanceof Promise ? await params : params;
@@ -31,6 +40,12 @@ export class WorkspaceResolver {
       throw new Error(`Workspace '${workspaceSlug}' not found`);
     }
 
+    // Get organization for this workspace
+    const organization = this.organizationRepo.getById(workspace.organization_id);
+    if (!organization) {
+      throw new Error('Workspace organization not found');
+    }
+
     // Get authenticated user - REQUIRED for workspace access
     const sessionId = await getSessionCookie();
     if (!sessionId) {
@@ -42,40 +57,66 @@ export class WorkspaceResolver {
       throw new Error('Invalid or expired session');
     }
 
-    // CRITICAL SECURITY: Check workspace access via user_workspaces table
+    // CRITICAL SECURITY: Check organization AND workspace access
     // Super admins bypass this check
     if (user.system_role !== 'super_admin') {
       const db = (await import('@/db')).getDb();
-      const access = db
+      
+      // Check organization access
+      const orgAccess = db
+        .prepare(`
+          SELECT role FROM user_organizations 
+          WHERE user_id = ? AND organization_id = ?
+        `)
+        .get(user.id, organization.id) as { role: 'owner' | 'admin' | 'member' } | undefined;
+
+      if (!orgAccess) {
+        throw new Error(`Access denied to organization '${organization.slug}'`);
+      }
+
+      // Check workspace access
+      const workspaceAccess = db
         .prepare(`
           SELECT role FROM user_workspaces 
           WHERE user_id = ? AND workspace_id = ?
         `)
         .get(user.id, workspace.id) as { role: 'owner' | 'admin' | 'member' | 'viewer' } | undefined;
 
-      if (!access) {
+      if (!workspaceAccess) {
         throw new Error(`Access denied to workspace '${workspaceSlug}'`);
       }
 
       return {
+        organization: {
+          id: organization.id,
+          slug: organization.slug,
+          name: organization.name
+        },
         workspace: {
           id: workspace.id,
           slug: workspace.slug,
           name: workspace.name
         },
         user,
-        workspaceRole: access.role
+        organizationRole: orgAccess.role,
+        workspaceRole: workspaceAccess.role
       };
     }
 
-    // Super admin gets owner-level access
+    // Super admin gets owner-level access to everything
     return {
+      organization: {
+        id: organization.id,
+        slug: organization.slug,
+        name: organization.name
+      },
       workspace: {
         id: workspace.id,
         slug: workspace.slug,
         name: workspace.name
       },
       user,
+      organizationRole: 'owner',
       workspaceRole: 'owner'
     };
   }

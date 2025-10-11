@@ -59,23 +59,35 @@ export async function POST(request: NextRequest) {
 
     const userId = result.lastInsertRowid;
 
-    // NEW SECURITY: Do NOT auto-grant access to all workspaces
-    // Users must be explicitly invited to workspaces
-    // The only exception is if there are NO workspaces, we could create a default one
+    // Create a default organization for new users
+    // This gives them their own isolated tenant space
+    const orgSlug = `${email.split('@')[0]}-${userId}`.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    const orgName = `${firstName}'s Organization`;
     
-    const workspaceCount = db.prepare('SELECT COUNT(*) as count FROM workspaces').get() as { count: number };
+    const orgResult = db
+      .prepare(`INSERT INTO organizations (slug, name, billing_email, plan) VALUES (?, ?, ?, 'free')`)
+      .run(orgSlug, orgName, email);
     
-    if (workspaceCount.count === 0) {
-      // First user - create a default workspace and grant ownership
-      const workspaceResult = db
-        .prepare(`INSERT INTO workspaces (slug, name, metadata) VALUES (?, ?, ?)`)
-        .run('default', 'Default Workspace', JSON.stringify({ description: 'Your first workspace' }));
-      
-      db.prepare(
-        `INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by)
-         VALUES (?, ?, 'owner', ?)`
-      ).run(userId, workspaceResult.lastInsertRowid, userId);
-    }
+    const organizationId = orgResult.lastInsertRowid;
+
+    // Grant user as owner of their organization
+    db.prepare(
+      `INSERT INTO user_organizations (user_id, organization_id, role, invited_by)
+       VALUES (?, ?, 'owner', ?)`
+    ).run(userId, organizationId, userId);
+
+    // Create a default workspace within the organization
+    const workspaceResult = db
+      .prepare(`INSERT INTO workspaces (slug, name, organization_id, metadata) VALUES (?, ?, ?, ?)`)
+      .run('my-workspace', 'My Workspace', organizationId, JSON.stringify({ description: 'Your first workspace' }));
+    
+    const workspaceId = workspaceResult.lastInsertRowid;
+
+    // Grant user access to the workspace
+    db.prepare(
+      `INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by)
+       VALUES (?, ?, 'owner', ?)`
+    ).run(userId, workspaceId, userId);
 
     return NextResponse.json(
       {
