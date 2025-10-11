@@ -620,7 +620,7 @@ export default function ProjectPage() {
                 <h3 className="font-medium mb-3">Selected Files ({uploadFiles.length})</h3>
                 <div className="space-y-2">
                   {uploadFiles.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
+                    <div key={`${file.name}-${file.size}-${index}`} className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
                       <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{file.name}</span>
                       <Button
                         variant="ghost"

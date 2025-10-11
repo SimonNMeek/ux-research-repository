@@ -244,12 +244,24 @@ CREATE INDEX idx_user_preferences_user_id ON user_preferences(user_id);
 -- =============================================================================
 
 -- Enable RLS on all tenant-scoped tables
+-- FORCE means it applies even to table owners (critical for testing!)
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organizations FORCE ROW LEVEL SECURITY;
+
 ALTER TABLE workspaces ENABLE ROW LEVEL SECURITY;
+ALTER TABLE workspaces FORCE ROW LEVEL SECURITY;
+
 ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE projects FORCE ROW LEVEL SECURITY;
+
 ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE documents FORCE ROW LEVEL SECURITY;
+
 ALTER TABLE workspace_tags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE workspace_tags FORCE ROW LEVEL SECURITY;
+
 ALTER TABLE searches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE searches FORCE ROW LEVEL SECURITY;
 
 -- Policy: Users can only see their own organizations
 CREATE POLICY org_access_policy ON organizations
