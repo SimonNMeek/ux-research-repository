@@ -1,4 +1,5 @@
 import { getDb } from '../../../db/index';
+import { getDbAdapter, getDbType } from '../../../db/adapter';
 
 export interface Project {
   id: number;
@@ -11,10 +12,12 @@ export interface Project {
 }
 
 export class ProjectRepo {
-  private db = getDb();
+  private getDbConnection() {
+    return getDb();
+  }
 
   listByWorkspace(workspaceId: number): Project[] {
-    const rows = this.db
+    const rows = this.getDbConnection()
       .prepare('SELECT * FROM projects WHERE workspace_id = ? ORDER BY name')
       .all(workspaceId) as any[];
     
@@ -25,7 +28,7 @@ export class ProjectRepo {
   }
 
   listByWorkspaceWithDocumentCounts(workspaceId: number): (Project & { document_count: number })[] {
-    const rows = this.db
+    const rows = this.getDbConnection()
       .prepare(`
         SELECT p.*, 
                COALESCE(COUNT(d.id), 0) as document_count
@@ -45,7 +48,7 @@ export class ProjectRepo {
   }
 
   getBySlug(workspaceId: number, slug: string): Project | null {
-    const row = this.db
+    const row = this.getDbConnection()
       .prepare('SELECT * FROM projects WHERE workspace_id = ? AND slug = ?')
       .get(workspaceId, slug) as any;
     
@@ -58,7 +61,7 @@ export class ProjectRepo {
   }
 
   getById(id: number): Project | null {
-    const row = this.db
+    const row = this.getDbConnection()
       .prepare('SELECT * FROM projects WHERE id = ?')
       .get(id) as any;
     
@@ -78,7 +81,7 @@ export class ProjectRepo {
   }): Project {
     const metadata = JSON.stringify(data.metadata || {});
     
-    const result = this.db
+    const result = this.getDbConnection()
       .prepare(`
         INSERT INTO projects (workspace_id, slug, name, description, metadata) 
         VALUES (?, ?, ?, ?, ?) 
@@ -127,7 +130,7 @@ export class ProjectRepo {
     
     values.push(id);
     
-    const result = this.db
+    const result = this.getDbConnection()
       .prepare(`UPDATE projects SET ${updates.join(', ')} WHERE id = ? RETURNING *`)
       .get(...values) as any;
     
@@ -140,7 +143,7 @@ export class ProjectRepo {
   }
 
   delete(id: number): boolean {
-    const result = this.db
+    const result = this.getDbConnection()
       .prepare('DELETE FROM projects WHERE id = ?')
       .run(id);
     
@@ -152,7 +155,7 @@ export class ProjectRepo {
     if (projectIds.length === 0) return [];
     
     const placeholders = projectIds.map(() => '?').join(',');
-    const rows = this.db
+    const rows = this.getDbConnection()
       .prepare(`
         SELECT * FROM projects 
         WHERE workspace_id = ? AND id IN (${placeholders})
@@ -170,7 +173,7 @@ export class ProjectRepo {
     if (slugs.length === 0) return [];
     
     const placeholders = slugs.map(() => '?').join(',');
-    const rows = this.db
+    const rows = this.getDbConnection()
       .prepare(`
         SELECT id FROM projects 
         WHERE workspace_id = ? AND slug IN (${placeholders})

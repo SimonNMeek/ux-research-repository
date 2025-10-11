@@ -1,4 +1,5 @@
 import { getDb } from '../../../db/index';
+import { getDbAdapter, getDbType } from '../../../db/adapter';
 
 export interface Document {
   id: number;
@@ -22,7 +23,9 @@ export interface DocumentSearchResult extends Document {
 }
 
 export class DocumentRepo {
-  private db = getDb();
+  private getDbConnection() {
+    return getDb();
+  }
 
   create(projectId: number, data: {
     title: string;
@@ -34,7 +37,7 @@ export class DocumentRepo {
     anonymization_profile_id?: string;
     clean_version?: number;
   }): Document {
-    const result = this.db
+    const result = this.getDbConnection()
       .prepare(`
         INSERT INTO documents (
           project_id, title, body, original_text, clean_text, 
@@ -62,7 +65,7 @@ export class DocumentRepo {
   }
 
   get(id: number): Document | null {
-    const row = this.db
+    const row = this.getDbConnection()
       .prepare('SELECT * FROM documents WHERE id = ?')
       .get(id) as any;
     
@@ -77,7 +80,7 @@ export class DocumentRepo {
   list(projectId: number, options: { limit?: number; offset?: number } = {}): Document[] {
     const { limit = 50, offset = 0 } = options;
     
-    const rows = this.db
+    const rows = this.getDbConnection()
       .prepare(`
         SELECT * FROM documents 
         WHERE project_id = ? 
@@ -99,7 +102,7 @@ export class DocumentRepo {
     const placeholders = projectIds.map(() => '?').join(',');
     
     // Use FTS for full-text search
-    const rows = this.db
+    const rows = this.getDbConnection()
       .prepare(`
         SELECT 
           d.*,
@@ -129,7 +132,7 @@ export class DocumentRepo {
     const placeholders = projectIds.map(() => '?').join(',');
     const searchTerm = `%${query}%`;
     
-    const rows = this.db
+    const rows = this.getDbConnection()
       .prepare(`
         SELECT 
           d.*,
@@ -182,7 +185,7 @@ export class DocumentRepo {
     
     values.push(id);
     
-    const result = this.db
+    const result = this.getDbConnection()
       .prepare(`UPDATE documents SET ${updates.join(', ')} WHERE id = ? RETURNING *`)
       .get(...values) as any;
     
@@ -195,7 +198,7 @@ export class DocumentRepo {
   }
 
   delete(id: number): boolean {
-    const result = this.db
+    const result = this.getDbConnection()
       .prepare('DELETE FROM documents WHERE id = ?')
       .run(id);
     
@@ -204,7 +207,7 @@ export class DocumentRepo {
 
   // Delete with workspace validation
   deleteWithWorkspaceValidation(id: number, workspaceId: number): boolean {
-    const result = this.db
+    const result = this.getDbConnection()
       .prepare(`
         DELETE FROM documents 
         WHERE id = ? 
@@ -219,7 +222,7 @@ export class DocumentRepo {
 
   // Get document by ID with workspace validation
   getById(id: number, workspaceId: number): Document | null {
-    const row = this.db
+    const row = this.getDbConnection()
       .prepare(`
         SELECT d.* 
         FROM documents d
@@ -238,7 +241,7 @@ export class DocumentRepo {
 
   // Toggle favorite status with workspace validation
   toggleFavorite(id: number, workspaceId: number): { is_favorite: boolean } {
-    const result = this.db
+    const result = this.getDbConnection()
       .prepare(`
         UPDATE documents 
         SET is_favorite = NOT is_favorite 
@@ -266,7 +269,7 @@ export class DocumentRepo {
     const { limit = 50 } = options;
     const placeholders = projectIds.map(() => '?').join(',');
     
-    const rows = this.db
+    const rows = this.getDbConnection()
       .prepare(`
         SELECT 
           d.*,
@@ -289,7 +292,7 @@ export class DocumentRepo {
 
   // Get document with project info for workspace validation
   getWithProject(id: number): (Document & { workspace_id: number; project_slug: string }) | null {
-    const row = this.db
+    const row = this.getDbConnection()
       .prepare(`
         SELECT d.*, p.workspace_id, p.slug as project_slug
         FROM documents d
@@ -311,7 +314,7 @@ export class DocumentRepo {
     if (projectIds.length === 0) return 0;
     
     const placeholders = projectIds.map(() => '?').join(',');
-    const result = this.db
+    const result = this.getDbConnection()
       .prepare(`SELECT COUNT(*) as count FROM documents WHERE project_id IN (${placeholders})`)
       .get(...projectIds) as any;
     

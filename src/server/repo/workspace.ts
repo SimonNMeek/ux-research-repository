@@ -1,4 +1,5 @@
 import { getDb } from '../../../db/index';
+import { getDbAdapter, getDbType } from '../../../db/adapter';
 
 export interface Workspace {
   id: number;
@@ -10,10 +11,12 @@ export interface Workspace {
 }
 
 export class WorkspaceRepo {
-  private db = getDb();
+  private getDbConnection() {
+    return getDb();
+  }
 
   getBySlug(slug: string): Workspace | null {
-    const row = this.db
+    const row = this.getDbConnection()
       .prepare('SELECT * FROM workspaces WHERE slug = ?')
       .get(slug) as any;
     
@@ -26,7 +29,7 @@ export class WorkspaceRepo {
   }
 
   listAll(): Workspace[] {
-    const rows = this.db
+    const rows = this.getDbConnection()
       .prepare('SELECT * FROM workspaces ORDER BY name')
       .all() as any[];
     
@@ -40,7 +43,7 @@ export class WorkspaceRepo {
    * List workspaces by organization
    */
   listByOrganization(organizationId: number): Workspace[] {
-    const rows = this.db
+    const rows = this.getDbConnection()
       .prepare('SELECT * FROM workspaces WHERE organization_id = ? ORDER BY name')
       .all(organizationId) as any[];
     
@@ -58,7 +61,7 @@ export class WorkspaceRepo {
   }): Workspace {
     const metadata = JSON.stringify(data.metadata || {});
     
-    const result = this.db
+    const result = this.getDbConnection()
       .prepare('INSERT INTO workspaces (slug, name, organization_id, metadata) VALUES (?, ?, ?, ?) RETURNING *')
       .get(data.slug, data.name, data.organization_id, metadata) as any;
     
@@ -88,7 +91,7 @@ export class WorkspaceRepo {
     
     values.push(id);
     
-    const result = this.db
+    const result = this.getDbConnection()
       .prepare(`UPDATE workspaces SET ${updates.join(', ')} WHERE id = ? RETURNING *`)
       .get(...values) as any;
     
@@ -101,7 +104,7 @@ export class WorkspaceRepo {
   }
 
   private getById(id: number): Workspace | null {
-    const row = this.db
+    const row = this.getDbConnection()
       .prepare('SELECT * FROM workspaces WHERE id = ?')
       .get(id) as any;
     

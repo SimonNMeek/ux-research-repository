@@ -1,4 +1,5 @@
 import { getDb } from '../../../db/index';
+import { getDbAdapter, getDbType } from '../../../db/adapter';
 
 export interface Tag {
   id: number;
@@ -8,11 +9,13 @@ export interface Tag {
 }
 
 export class TagRepo {
-  private db = getDb();
+  private getDbConnection() {
+    return getDb();
+  }
 
   upsert(workspaceId: number, name: string): Tag {
     // Try to get existing tag first
-    const existing = this.db
+    const existing = this.getDbConnection()
       .prepare('SELECT * FROM workspace_tags WHERE workspace_id = ? AND name = ?')
       .get(workspaceId, name) as any;
     
@@ -21,7 +24,7 @@ export class TagRepo {
     }
     
     // Create new tag
-    const result = this.db
+    const result = this.getDbConnection()
       .prepare('INSERT INTO workspace_tags (workspace_id, name) VALUES (?, ?) RETURNING *')
       .get(workspaceId, name) as any;
     
@@ -29,7 +32,7 @@ export class TagRepo {
   }
 
   list(workspaceId: number): Tag[] {
-    const rows = this.db
+    const rows = this.getDbConnection()
       .prepare('SELECT * FROM workspace_tags WHERE workspace_id = ? ORDER BY name')
       .all(workspaceId) as any[];
     
@@ -37,7 +40,7 @@ export class TagRepo {
   }
 
   getById(id: number): Tag | null {
-    const row = this.db
+    const row = this.getDbConnection()
       .prepare('SELECT * FROM workspace_tags WHERE id = ?')
       .get(id) as any;
     
@@ -45,7 +48,7 @@ export class TagRepo {
   }
 
   getByName(workspaceId: number, name: string): Tag | null {
-    const row = this.db
+    const row = this.getDbConnection()
       .prepare('SELECT * FROM workspace_tags WHERE workspace_id = ? AND name = ?')
       .get(workspaceId, name) as any;
     
@@ -57,14 +60,14 @@ export class TagRepo {
     if (tagIds.length === 0) return;
     
     // Remove existing tags first
-    this.db
+    this.getDbConnection()
       .prepare('DELETE FROM document_tags WHERE document_id = ?')
       .run(documentId);
     
     // Insert new tags
-    const insertStmt = this.db.prepare('INSERT INTO document_tags (document_id, tag_id) VALUES (?, ?)');
+    const insertStmt = this.getDbConnection().prepare('INSERT INTO document_tags (document_id, tag_id) VALUES (?, ?)');
     
-    this.db.transaction(() => {
+    this.getDbConnection().transaction(() => {
       for (const tagId of tagIds) {
         insertStmt.run(documentId, tagId);
       }
@@ -75,11 +78,11 @@ export class TagRepo {
   addToDocument(documentId: number, tagIds: number[]): void {
     if (tagIds.length === 0) return;
     
-    const insertStmt = this.db.prepare(`
+    const insertStmt = this.getDbConnection().prepare(`
       INSERT OR IGNORE INTO document_tags (document_id, tag_id) VALUES (?, ?)
     `);
     
-    this.db.transaction(() => {
+    this.getDbConnection().transaction(() => {
       for (const tagId of tagIds) {
         insertStmt.run(documentId, tagId);
       }
@@ -91,14 +94,14 @@ export class TagRepo {
     if (tagIds.length === 0) return;
     
     const placeholders = tagIds.map(() => '?').join(',');
-    this.db
+    this.getDbConnection()
       .prepare(`DELETE FROM document_tags WHERE document_id = ? AND tag_id IN (${placeholders})`)
       .run(documentId, ...tagIds);
   }
 
   // Get tags for a document
   getForDocument(documentId: number): Tag[] {
-    const rows = this.db
+    const rows = this.getDbConnection()
       .prepare(`
         SELECT wt.* 
         FROM workspace_tags wt
@@ -115,7 +118,7 @@ export class TagRepo {
   getDocumentsForTag(tagId: number, options: { limit?: number; offset?: number } = {}): number[] {
     const { limit = 50, offset = 0 } = options;
     
-    const rows = this.db
+    const rows = this.getDbConnection()
       .prepare(`
         SELECT document_id 
         FROM document_tags 
@@ -133,7 +136,7 @@ export class TagRepo {
     
     const tagIds: number[] = [];
     
-    this.db.transaction(() => {
+    this.getDbConnection().transaction(() => {
       for (const name of names) {
         const tag = this.upsert(workspaceId, name);
         tagIds.push(tag.id);
@@ -145,7 +148,7 @@ export class TagRepo {
 
   // Delete unused tags in a workspace
   deleteUnused(workspaceId: number): number {
-    const result = this.db
+    const result = this.getDbConnection()
       .prepare(`
         DELETE FROM workspace_tags 
         WHERE workspace_id = ? 
@@ -160,7 +163,7 @@ export class TagRepo {
 
   // Get tag usage statistics
   getUsageStats(workspaceId: number): Array<{ tag: Tag; document_count: number }> {
-    const rows = this.db
+    const rows = this.getDbConnection()
       .prepare(`
         SELECT 
           wt.*,
@@ -190,7 +193,7 @@ export class TagRepo {
     const tag = this.upsert(workspaceId, tagName);
     
     // Then attach it to the document
-    this.db
+    this.getDbConnection()
       .prepare('INSERT OR IGNORE INTO document_tags (document_id, tag_id) VALUES (?, ?)')
       .run(documentId, tag.id);
   }
@@ -202,7 +205,7 @@ export class TagRepo {
     if (!tag) return; // Tag doesn't exist, nothing to remove
     
     // Remove the association
-    this.db
+    this.getDbConnection()
       .prepare('DELETE FROM document_tags WHERE document_id = ? AND tag_id = ?')
       .run(documentId, tag.id);
   }
