@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
 import { getDb } from '@/db';
+import { compareSync, hashSync } from 'bcryptjs';
 
 export type User = {
   id: number;
@@ -11,12 +12,32 @@ export type User = {
   system_role?: string;
 };
 
+export function hashPassword(password: string): string {
+  return hashSync(password, 10);
+}
+
 export async function authenticateUser(email: string, password: string): Promise<User | null> {
   const db = getDb();
   const row = db.prepare(`SELECT id, email, name, first_name, last_name, is_active, system_role, password_hash FROM users WHERE email = ? AND is_active = 1`).get(email) as (User & { password_hash: string }) | undefined;
   if (!row) return null;
-  // Minimal check: password equals stored password_hash (seeded as plain for demo)
-  if (password !== row.password_hash) return null;
+  
+  // Check if password_hash is plain text (legacy/demo users)
+  let isValid = false;
+  if (row.password_hash.startsWith('$2b$') || row.password_hash.startsWith('$2a$')) {
+    // Bcrypt hash
+    isValid = compareSync(password, row.password_hash);
+  } else {
+    // Plain text (demo mode) - check and upgrade
+    isValid = password === row.password_hash;
+    if (isValid) {
+      // Upgrade to bcrypt
+      const newHash = hashPassword(password);
+      db.prepare(`UPDATE users SET password_hash = ? WHERE id = ?`).run(newHash, row.id);
+    }
+  }
+  
+  if (!isValid) return null;
+  
   db.prepare(`UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?`).run(row.id);
   return { 
     id: row.id, 

@@ -8,7 +8,8 @@ export interface WorkspaceContext {
     slug: string;
     name: string;
   };
-  user: User | null;
+  user: User;
+  workspaceRole: 'owner' | 'admin' | 'member' | 'viewer';
 }
 
 export class WorkspaceResolver {
@@ -30,17 +31,52 @@ export class WorkspaceResolver {
       throw new Error(`Workspace '${workspaceSlug}' not found`);
     }
 
-    // Get authenticated user
+    // Get authenticated user - REQUIRED for workspace access
     const sessionId = await getSessionCookie();
-    const user = sessionId ? validateSession(sessionId) : null;
+    if (!sessionId) {
+      throw new Error('Authentication required');
+    }
 
+    const user = validateSession(sessionId);
+    if (!user) {
+      throw new Error('Invalid or expired session');
+    }
+
+    // CRITICAL SECURITY: Check workspace access via user_workspaces table
+    // Super admins bypass this check
+    if (user.system_role !== 'super_admin') {
+      const db = (await import('@/db')).getDb();
+      const access = db
+        .prepare(`
+          SELECT role FROM user_workspaces 
+          WHERE user_id = ? AND workspace_id = ?
+        `)
+        .get(user.id, workspace.id) as { role: 'owner' | 'admin' | 'member' | 'viewer' } | undefined;
+
+      if (!access) {
+        throw new Error(`Access denied to workspace '${workspaceSlug}'`);
+      }
+
+      return {
+        workspace: {
+          id: workspace.id,
+          slug: workspace.slug,
+          name: workspace.name
+        },
+        user,
+        workspaceRole: access.role
+      };
+    }
+
+    // Super admin gets owner-level access
     return {
       workspace: {
         id: workspace.id,
         slug: workspace.slug,
         name: workspace.name
       },
-      user
+      user,
+      workspaceRole: 'owner'
     };
   }
 
@@ -60,6 +96,36 @@ export class WorkspaceResolver {
     if (workspaceId !== documentWorkspaceId) {
       throw new Error('Document not in active workspace');
     }
+  }
+
+  /**
+   * Check if user can modify workspace (owner/admin only)
+   */
+  canModifyWorkspace(context: WorkspaceContext): boolean {
+    return context.workspaceRole === 'owner' || context.workspaceRole === 'admin';
+  }
+
+  /**
+   * Check if user can create/delete projects (owner/admin only)
+   */
+  canManageProjects(context: WorkspaceContext): boolean {
+    return context.workspaceRole === 'owner' || context.workspaceRole === 'admin';
+  }
+
+  /**
+   * Check if user can create/edit documents (owner/admin/member)
+   */
+  canEditDocuments(context: WorkspaceContext): boolean {
+    return context.workspaceRole === 'owner' || 
+           context.workspaceRole === 'admin' || 
+           context.workspaceRole === 'member';
+  }
+
+  /**
+   * Check if user can view workspace (all roles)
+   */
+  canViewWorkspace(context: WorkspaceContext): boolean {
+    return true; // If they got past resolveFromParams, they can view
   }
 }
 

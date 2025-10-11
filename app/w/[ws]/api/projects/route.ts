@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server';
-import { withWorkspace, WorkspaceRouteHandler } from '../../../../../src/server/workspace-resolver';
+import { withWorkspace, WorkspaceRouteHandler, workspaceResolver } from '../../../../../src/server/workspace-resolver';
 import { ProjectRepo } from '../../../../../src/server/repo/project';
-import { canCreateProject, getPermissionErrorMessage, PERMISSIONS } from '@/lib/permissions';
 
 export const runtime = 'nodejs';
 
@@ -11,6 +10,7 @@ const handler: WorkspaceRouteHandler = async (context, req) => {
   const { workspace, user } = context;
 
   if (req.method === 'GET') {
+    // All authenticated workspace members can view projects
     try {
       const projects = projectRepo.listByWorkspaceWithDocumentCounts(workspace.id);
       return new Response(
@@ -29,18 +29,10 @@ const handler: WorkspaceRouteHandler = async (context, req) => {
   }
 
   if (req.method === 'POST') {
-    // Check authentication
-    if (!user) {
+    // Check workspace-level permissions (owner/admin can create projects)
+    if (!workspaceResolver.canManageProjects(context)) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { 'content-type': 'application/json' } }
-      );
-    }
-
-    // Check permissions
-    if (!canCreateProject(user)) {
-      return new Response(
-        JSON.stringify({ error: getPermissionErrorMessage(PERMISSIONS.CREATE_PROJECT) }),
+        JSON.stringify({ error: 'Only workspace owners and admins can create projects' }),
         { status: 403, headers: { 'content-type': 'application/json' } }
       );
     }

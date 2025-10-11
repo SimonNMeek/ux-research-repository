@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { withWorkspace, WorkspaceRouteHandler } from '../../../../../../../src/server/workspace-resolver';
+import { withWorkspace, WorkspaceRouteHandler, workspaceResolver } from '../../../../../../../src/server/workspace-resolver';
 import { ProjectRepo } from '../../../../../../../src/server/repo/project';
 import { DocumentRepo } from '../../../../../../../src/server/repo/document';
 import { TagRepo } from '../../../../../../../src/server/repo/tag';
@@ -64,6 +64,14 @@ const handler: WorkspaceRouteHandler = async (context, req, routeParams) => {
   }
 
   if (req.method === 'POST') {
+    // Check workspace-level permissions (owner/admin/member can create documents)
+    if (!workspaceResolver.canEditDocuments(context)) {
+      return new Response(
+        JSON.stringify({ error: 'You do not have permission to create documents in this workspace' }),
+        { status: 403, headers: { 'content-type': 'application/json' } }
+      );
+    }
+
     try {
       const body = await req.json();
       const { title, body: docBody, source_url, author, tags, anonymize, anonymizationConfig } = body;

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/db';
+import { hashPassword } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -44,8 +45,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // For demo purposes, we're storing plain text passwords
-    // In production, use bcrypt or similar
+    // Hash password with bcrypt
+    const passwordHash = hashPassword(password);
     const fullName = `${firstName} ${lastName}`.trim();
 
     // Insert new user with 'contributor' role by default
@@ -54,23 +55,26 @@ export async function POST(request: NextRequest) {
         `INSERT INTO users (email, name, first_name, last_name, password_hash, system_role)
          VALUES (?, ?, ?, ?, ?, 'contributor')`
       )
-      .run(email, fullName, firstName, lastName, password);
+      .run(email, fullName, firstName, lastName, passwordHash);
 
     const userId = result.lastInsertRowid;
 
-    // Get all workspaces and grant contributor access
-    const workspaces = db
-      .prepare('SELECT id FROM workspaces')
-      .all() as Array<{ id: number }>;
-
-    // Grant 'member' workspace role to new contributors
-    const grantAccess = db.prepare(
-      `INSERT INTO user_workspaces (user_id, workspace_id, role)
-       VALUES (?, ?, 'member')`
-    );
-
-    for (const workspace of workspaces) {
-      grantAccess.run(userId, workspace.id);
+    // NEW SECURITY: Do NOT auto-grant access to all workspaces
+    // Users must be explicitly invited to workspaces
+    // The only exception is if there are NO workspaces, we could create a default one
+    
+    const workspaceCount = db.prepare('SELECT COUNT(*) as count FROM workspaces').get() as { count: number };
+    
+    if (workspaceCount.count === 0) {
+      // First user - create a default workspace and grant ownership
+      const workspaceResult = db
+        .prepare(`INSERT INTO workspaces (slug, name, metadata) VALUES (?, ?, ?)`)
+        .run('default', 'Default Workspace', JSON.stringify({ description: 'Your first workspace' }));
+      
+      db.prepare(
+        `INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by)
+         VALUES (?, ?, 'owner', ?)`
+      ).run(userId, workspaceResult.lastInsertRowid, userId);
     }
 
     return NextResponse.json(

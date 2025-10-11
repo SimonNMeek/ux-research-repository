@@ -5,14 +5,42 @@ import { canCreateWorkspace, getPermissionErrorMessage, PERMISSIONS } from '@/li
 
 export async function GET() {
   try {
+    // Get authenticated user
+    const sessionId = await getSessionCookie();
+    if (!sessionId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const user = validateSession(sessionId);
+    if (!user) {
+      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
+    }
+
     const db = getDb();
+    
+    // Super admins can see all workspaces
+    if (user.system_role === 'super_admin') {
+      const workspaces = db
+        .prepare(`
+          SELECT id, name, slug, created_at
+          FROM workspaces
+          ORDER BY name
+        `)
+        .all();
+
+      return NextResponse.json({ workspaces });
+    }
+    
+    // Regular users only see workspaces they have access to
     const workspaces = db
       .prepare(`
-        SELECT id, name, slug, created_at
-        FROM workspaces
-        ORDER BY name
+        SELECT w.id, w.name, w.slug, w.created_at, uw.role
+        FROM workspaces w
+        INNER JOIN user_workspaces uw ON w.id = uw.workspace_id
+        WHERE uw.user_id = ?
+        ORDER BY w.name
       `)
-      .all();
+      .all(user.id);
 
     return NextResponse.json({ workspaces });
   } catch (error: any) {
@@ -77,13 +105,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Create workspace (store description in metadata JSON)
-    db.prepare(
+    const result = db.prepare(
       `INSERT INTO workspaces (slug, name, metadata) VALUES (?, ?, ?)`
     ).run(slug, name, JSON.stringify({ description: description || '' }));
 
+    const workspaceId = result.lastInsertRowid;
+
+    // CRITICAL: Auto-grant creator as owner in user_workspaces
+    db.prepare(
+      `INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by)
+       VALUES (?, ?, 'owner', ?)`
+    ).run(user.id, workspaceId, user.id);
+
     const newWorkspace = db
-      .prepare(`SELECT id, name, slug, created_at FROM workspaces WHERE slug = ?`)
-      .get(slug);
+      .prepare(`SELECT id, name, slug, created_at FROM workspaces WHERE id = ?`)
+      .get(workspaceId);
 
     return NextResponse.json({ workspace: newWorkspace }, { status: 201 });
   } catch (error: any) {
