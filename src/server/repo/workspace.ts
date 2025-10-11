@@ -15,10 +15,18 @@ export class WorkspaceRepo {
     return getDb();
   }
 
-  getBySlug(slug: string): Workspace | null {
-    const row = this.getDbConnection()
-      .prepare('SELECT * FROM workspaces WHERE slug = ?')
-      .get(slug) as any;
+  async getBySlug(slug: string): Promise<Workspace | null> {
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
+    
+    let row: any;
+    if (dbType === 'postgres') {
+      const result = await adapter.query('SELECT * FROM workspaces WHERE slug = $1', [slug]);
+      row = result.rows[0];
+    } else {
+      const db = this.getDbConnection();
+      row = db.prepare('SELECT * FROM workspaces WHERE slug = ?').get(slug);
+    }
     
     if (!row) return null;
     

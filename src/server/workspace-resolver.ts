@@ -35,13 +35,13 @@ export class WorkspaceResolver {
       throw new Error('Workspace slug is required');
     }
 
-    const workspace = this.workspaceRepo.getBySlug(workspaceSlug);
+    const workspace = await this.workspaceRepo.getBySlug(workspaceSlug);
     if (!workspace) {
       throw new Error(`Workspace '${workspaceSlug}' not found`);
     }
 
     // Get organization for this workspace
-    const organization = this.organizationRepo.getById(workspace.organization_id);
+    const organization = await this.organizationRepo.getById(workspace.organization_id);
     if (!organization) {
       throw new Error('Workspace organization not found');
     }
