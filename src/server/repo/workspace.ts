@@ -30,9 +30,19 @@ export class WorkspaceRepo {
     
     if (!row) return null;
     
+    // Handle metadata - PostgreSQL returns JSON objects, SQLite returns strings
+    let metadata = {};
+    if (row.metadata) {
+      if (typeof row.metadata === 'string') {
+        metadata = JSON.parse(row.metadata);
+      } else {
+        metadata = row.metadata;
+      }
+    }
+    
     return {
       ...row,
-      metadata: JSON.parse(row.metadata || '{}')
+      metadata
     };
   }
 
@@ -41,10 +51,22 @@ export class WorkspaceRepo {
       .prepare('SELECT * FROM workspaces ORDER BY name')
       .all() as any[];
     
-    return rows.map(row => ({
-      ...row,
-      metadata: JSON.parse(row.metadata || '{}')
-    }));
+    return rows.map(row => {
+      // Handle metadata - PostgreSQL returns JSON objects, SQLite returns strings
+      let metadata = {};
+      if (row.metadata) {
+        if (typeof row.metadata === 'string') {
+          metadata = JSON.parse(row.metadata);
+        } else {
+          metadata = row.metadata;
+        }
+      }
+      
+      return {
+        ...row,
+        metadata
+      };
+    });
   }
 
   /**
@@ -55,10 +77,22 @@ export class WorkspaceRepo {
       .prepare('SELECT * FROM workspaces WHERE organization_id = ? ORDER BY name')
       .all(organizationId) as any[];
     
-    return rows.map(row => ({
-      ...row,
-      metadata: JSON.parse(row.metadata || '{}')
-    }));
+    return rows.map(row => {
+      // Handle metadata - PostgreSQL returns JSON objects, SQLite returns strings
+      let metadata = {};
+      if (row.metadata) {
+        if (typeof row.metadata === 'string') {
+          metadata = JSON.parse(row.metadata);
+        } else {
+          metadata = row.metadata;
+        }
+      }
+      
+      return {
+        ...row,
+        metadata
+      };
+    });
   }
 
   create(data: { 
