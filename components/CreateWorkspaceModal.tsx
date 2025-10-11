@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,24 @@ export default function CreateWorkspaceModal({ open, onOpenChange, onWorkspaceCr
   const [slug, setSlug] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [organizationId, setOrganizationId] = useState<number | null>(null);
+
+  // Fetch user's organizations when modal opens
+  useEffect(() => {
+    if (open && !organizationId) {
+      fetch('/api/organizations')
+        .then(res => res.json())
+        .then(data => {
+          if (data.organizations && data.organizations.length > 0) {
+            setOrganizationId(data.organizations[0].id);
+          }
+        })
+        .catch(err => {
+          console.error('Failed to fetch organizations:', err);
+          setError('Failed to load organizations');
+        });
+    }
+  }, [open, organizationId]);
 
   // Auto-generate slug from name
   const generateSlug = (name: string) => {
@@ -40,7 +58,7 @@ export default function CreateWorkspaceModal({ open, onOpenChange, onWorkspaceCr
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !slug.trim()) return;
+    if (!name.trim() || !slug.trim() || !organizationId) return;
 
     setCreating(true);
     setError(null);
@@ -52,7 +70,8 @@ export default function CreateWorkspaceModal({ open, onOpenChange, onWorkspaceCr
         body: JSON.stringify({
           name: name.trim(),
           slug: slug.trim(),
-          description: description.trim()
+          description: description.trim(),
+          organizationId: organizationId
         })
       });
 
@@ -160,7 +179,7 @@ export default function CreateWorkspaceModal({ open, onOpenChange, onWorkspaceCr
             </Button>
             <Button
               type="submit"
-              disabled={creating || !name.trim() || !slug.trim()}
+              disabled={creating || !name.trim() || !slug.trim() || !organizationId}
               className="flex-1"
             >
               {creating ? (
