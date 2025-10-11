@@ -60,13 +60,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = validateSession(sessionId);
+    const user = await validateSession(sessionId);
     if (!user) {
       return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
     }
 
     // Check permissions
+    console.log('DEBUG: User for workspace creation:', { id: user.id, email: user.email, system_role: user.system_role });
+    console.log('DEBUG: canCreateWorkspace result:', canCreateWorkspace(user));
+    
     if (!canCreateWorkspace(user)) {
+      console.log('DEBUG: Permission check failed for user:', user);
       return NextResponse.json(
         { error: getPermissionErrorMessage(PERMISSIONS.CREATE_WORKSPACE) },
         { status: 403 }
