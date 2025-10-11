@@ -329,9 +329,19 @@ export class OrganizationRepo {
   }
 
   private mapRow(row: any): Organization {
+    // Handle metadata - PostgreSQL returns JSON objects, SQLite returns strings
+    let metadata = {};
+    if (row.metadata) {
+      if (typeof row.metadata === 'string') {
+        metadata = JSON.parse(row.metadata);
+      } else {
+        metadata = row.metadata;
+      }
+    }
+    
     return {
       ...row,
-      metadata: JSON.parse(row.metadata || '{}')
+      metadata
     };
   }
 }
