@@ -60,27 +60,45 @@ export class WorkspaceResolver {
     // CRITICAL SECURITY: Check organization AND workspace access
     // Super admins bypass this check
     if (user.system_role !== 'super_admin') {
-      const db = (await import('@/db')).getDb();
+      const { getDbAdapter, getDbType } = await import('@/db/adapter');
+      const adapter = getDbAdapter();
+      const dbType = getDbType();
       
       // Check organization access
-      const orgAccess = db
-        .prepare(`
+      let orgAccess: { role: 'owner' | 'admin' | 'member' } | undefined;
+      if (dbType === 'postgres') {
+        const result = await adapter.query(`
+          SELECT role FROM user_organizations 
+          WHERE user_id = $1 AND organization_id = $2
+        `, [user.id, organization.id]);
+        orgAccess = result.rows[0] as { role: 'owner' | 'admin' | 'member' } | undefined;
+      } else {
+        const db = (await import('@/db')).getDb();
+        orgAccess = db.prepare(`
           SELECT role FROM user_organizations 
           WHERE user_id = ? AND organization_id = ?
-        `)
-        .get(user.id, organization.id) as { role: 'owner' | 'admin' | 'member' } | undefined;
+        `).get(user.id, organization.id) as { role: 'owner' | 'admin' | 'member' } | undefined;
+      }
 
       if (!orgAccess) {
         throw new Error(`Access denied to organization '${organization.slug}'`);
       }
 
       // Check workspace access
-      const workspaceAccess = db
-        .prepare(`
+      let workspaceAccess: { role: 'owner' | 'admin' | 'member' | 'viewer' } | undefined;
+      if (dbType === 'postgres') {
+        const result = await adapter.query(`
+          SELECT role FROM user_workspaces 
+          WHERE user_id = $1 AND workspace_id = $2
+        `, [user.id, workspace.id]);
+        workspaceAccess = result.rows[0] as { role: 'owner' | 'admin' | 'member' | 'viewer' } | undefined;
+      } else {
+        const db = (await import('@/db')).getDb();
+        workspaceAccess = db.prepare(`
           SELECT role FROM user_workspaces 
           WHERE user_id = ? AND workspace_id = ?
-        `)
-        .get(user.id, workspace.id) as { role: 'owner' | 'admin' | 'member' | 'viewer' } | undefined;
+        `).get(user.id, workspace.id) as { role: 'owner' | 'admin' | 'member' | 'viewer' } | undefined;
+      }
 
       if (!workspaceAccess) {
         throw new Error(`Access denied to workspace '${workspaceSlug}'`);
