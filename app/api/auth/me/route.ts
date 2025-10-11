@@ -3,7 +3,7 @@ import { getSessionCookie, validateSession } from '@/lib/auth';
 
 export async function GET() {
   const sessionId = await getSessionCookie();
-  const user = validateSession(sessionId);
+  const user = await validateSession(sessionId);
   if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
   return NextResponse.json({ user });
 }
