@@ -57,9 +57,10 @@ function runMigrations(db: Database.Database) {
 }
 
 export function getDb(): Database.Database {
-  // If DATABASE_URL is set, we should use PostgreSQL instead
+  // If DATABASE_URL is set, use the compatibility layer
   if (process.env.DATABASE_URL) {
-    throw new Error('getDb() should not be called when DATABASE_URL is set. Use getDbAdapter() instead.');
+    const { getDb: getCompatDb } = require('./compat');
+    return getCompatDb();
   }
 
   if (database) return database;
