@@ -17,31 +17,52 @@ export async function GET() {
       return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
     }
 
-    const db = getDb();
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
     
     // Super admins can see all workspaces
     if (user.system_role === 'super_admin') {
-      const workspaces = db
-        .prepare(`
+      let workspaces: any[];
+      if (dbType === 'postgres') {
+        const result = await adapter.query(`
           SELECT id, name, slug, created_at
           FROM workspaces
           ORDER BY name
-        `)
-        .all();
+        `);
+        workspaces = result.rows;
+      } else {
+        const db = getDb();
+        workspaces = db.prepare(`
+          SELECT id, name, slug, created_at
+          FROM workspaces
+          ORDER BY name
+        `).all();
+      }
 
       return NextResponse.json({ workspaces });
     }
     
     // Regular users only see workspaces they have access to
-    const workspaces = db
-      .prepare(`
+    let workspaces: any[];
+    if (dbType === 'postgres') {
+      const result = await adapter.query(`
+        SELECT w.id, w.name, w.slug, w.created_at, uw.role
+        FROM workspaces w
+        INNER JOIN user_workspaces uw ON w.id = uw.workspace_id
+        WHERE uw.user_id = $1
+        ORDER BY w.name
+      `, [user.id]);
+      workspaces = result.rows;
+    } else {
+      const db = getDb();
+      workspaces = db.prepare(`
         SELECT w.id, w.name, w.slug, w.created_at, uw.role
         FROM workspaces w
         INNER JOIN user_workspaces uw ON w.id = uw.workspace_id
         WHERE uw.user_id = ?
         ORDER BY w.name
-      `)
-      .all(user.id);
+      `).all(user.id);
+    }
 
     return NextResponse.json({ workspaces });
   } catch (error: any) {
