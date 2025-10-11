@@ -13,7 +13,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = validateSession(sessionId);
+    const user = await validateSession(sessionId);
     if (!user) {
       return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
     }
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = validateSession(sessionId);
+    const user = await validateSession(sessionId);
     if (!user) {
       return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
     }

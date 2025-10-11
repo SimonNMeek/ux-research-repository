@@ -52,7 +52,7 @@ export class WorkspaceResolver {
       throw new Error('Authentication required');
     }
 
-    const user = validateSession(sessionId);
+    const user = await validateSession(sessionId);
     if (!user) {
       throw new Error('Invalid or expired session');
     }

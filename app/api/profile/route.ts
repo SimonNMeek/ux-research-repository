@@ -5,7 +5,7 @@ import { getDb } from '@/db';
 export async function PUT(request: Request) {
   try {
     const sessionId = await getSessionCookie();
-    const user = validateSession(sessionId);
+    const user = await validateSession(sessionId);
     
     if (!user) {
       return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });

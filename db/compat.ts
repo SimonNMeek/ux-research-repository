@@ -11,47 +11,49 @@ export function getDb() {
   const adapter = getDbAdapter();
   const dbType = getDbType();
   
+  // Helper function to convert SQLite parameters to PostgreSQL
+  function convertSql(sql: string, params: any[] = []): string {
+    if (dbType === 'postgres') {
+      return sql.replace(/\?/g, (match, offset) => {
+        const paramIndex = sql.substring(0, offset).split('?').length;
+        return `$${paramIndex}`;
+      });
+    }
+    return sql;
+  }
+  
   // Create a mock database object that implements the same interface
   const mockDb = {
     prepare: (sql: string) => {
       return {
         get: (params: any[] = []) => {
           if (dbType === 'postgres') {
-            // Convert SQLite params (?) to PostgreSQL params ($1, $2, etc.)
-            const convertedSql = sql.replace(/\?/g, (match, offset) => {
-              const paramIndex = sql.substring(0, offset).split('?').length;
-              return `$${paramIndex}`;
-            });
+            const convertedSql = convertSql(sql, params);
             return adapter.query(convertedSql, params).then(result => result.rows[0]);
           } else {
-            return adapter.prepare(sql).get(params);
+            const stmt = adapter.prepare(sql);
+            return stmt.get(params);
           }
         },
         all: (params: any[] = []) => {
           if (dbType === 'postgres') {
-            // Convert SQLite params (?) to PostgreSQL params ($1, $2, etc.)
-            const convertedSql = sql.replace(/\?/g, (match, offset) => {
-              const paramIndex = sql.substring(0, offset).split('?').length;
-              return `$${paramIndex}`;
-            });
+            const convertedSql = convertSql(sql, params);
             return adapter.query(convertedSql, params).then(result => result.rows);
           } else {
-            return adapter.prepare(sql).all(params);
+            const stmt = adapter.prepare(sql);
+            return stmt.all(params);
           }
         },
         run: (params: any[] = []) => {
           if (dbType === 'postgres') {
-            // Convert SQLite params (?) to PostgreSQL params ($1, $2, etc.)
-            const convertedSql = sql.replace(/\?/g, (match, offset) => {
-              const paramIndex = sql.substring(0, offset).split('?').length;
-              return `$${paramIndex}`;
-            });
+            const convertedSql = convertSql(sql, params);
             return adapter.query(convertedSql, params).then(result => ({
               lastInsertRowid: result.rows[0]?.id,
               changes: result.rowCount || 0
             }));
           } else {
-            return adapter.prepare(sql).run(params);
+            const stmt = adapter.prepare(sql);
+            return stmt.run(params);
           }
         }
       };
