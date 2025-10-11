@@ -1,3 +1,4 @@
+import { getDbAdapter, getDbType } from '../../../db/adapter';
 import { getDb } from '../../../db/index';
 
 export interface Organization {
@@ -19,15 +20,21 @@ export interface OrganizationWithRole extends Organization {
 }
 
 export class OrganizationRepo {
-  private db = getDb();
-
   /**
    * Get organization by slug
    */
-  getBySlug(slug: string): Organization | null {
-    const row = this.db
-      .prepare('SELECT * FROM organizations WHERE slug = ?')
-      .get(slug) as any;
+  async getBySlug(slug: string): Promise<Organization | null> {
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
+    
+    let row: any;
+    if (dbType === 'postgres') {
+      const result = await adapter.query('SELECT * FROM organizations WHERE slug = $1', [slug]);
+      row = result.rows[0];
+    } else {
+      const db = getDb();
+      row = db.prepare('SELECT * FROM organizations WHERE slug = ?').get(slug);
+    }
     
     if (!row) return null;
     
@@ -37,10 +44,18 @@ export class OrganizationRepo {
   /**
    * Get organization by ID
    */
-  getById(id: number): Organization | null {
-    const row = this.db
-      .prepare('SELECT * FROM organizations WHERE id = ?')
-      .get(id) as any;
+  async getById(id: number): Promise<Organization | null> {
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
+    
+    let row: any;
+    if (dbType === 'postgres') {
+      const result = await adapter.query('SELECT * FROM organizations WHERE id = $1', [id]);
+      row = result.rows[0];
+    } else {
+      const db = getDb();
+      row = db.prepare('SELECT * FROM organizations WHERE id = ?').get(id);
+    }
     
     if (!row) return null;
     
@@ -50,9 +65,25 @@ export class OrganizationRepo {
   /**
    * List all organizations a user has access to
    */
-  listForUser(userId: number): OrganizationWithRole[] {
-    const rows = this.db
-      .prepare(`
+  async listForUser(userId: number): Promise<OrganizationWithRole[]> {
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
+    
+    let rows: any[];
+    if (dbType === 'postgres') {
+      const result = await adapter.query(`
+        SELECT 
+          o.*,
+          uo.role as user_role
+        FROM organizations o
+        INNER JOIN user_organizations uo ON o.id = uo.organization_id
+        WHERE uo.user_id = $1
+        ORDER BY o.name
+      `, [userId]);
+      rows = result.rows;
+    } else {
+      const db = getDb();
+      rows = db.prepare(`
         SELECT 
           o.*,
           uo.role as user_role
@@ -60,8 +91,8 @@ export class OrganizationRepo {
         INNER JOIN user_organizations uo ON o.id = uo.organization_id
         WHERE uo.user_id = ?
         ORDER BY o.name
-      `)
-      .all(userId) as any[];
+      `).all(userId);
+    }
     
     return rows.map(row => ({
       ...this.mapRow(row),

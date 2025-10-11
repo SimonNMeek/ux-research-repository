@@ -37,7 +37,7 @@ export async function GET() {
     }
 
     // Regular users see only organizations they belong to
-    const organizations = organizationRepo.listForUser(user.id);
+    const organizations = await organizationRepo.listForUser(user.id);
     
     return NextResponse.json({ organizations });
   } catch (error: any) {
