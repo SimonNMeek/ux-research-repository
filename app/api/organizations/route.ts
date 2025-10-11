@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getDbAdapter, getDbType } from '@/db/adapter';
 import { getDb } from '@/db/index';
 import { getSessionCookie, validateSession } from '@/lib/auth';
 import { OrganizationRepo } from '@/src/server/repo/organization';
@@ -20,10 +21,18 @@ export async function GET() {
 
     // Super admins see all organizations
     if (user.system_role === 'super_admin') {
-      const db = getDb();
-      const organizations = db
-        .prepare('SELECT * FROM organizations ORDER BY name')
-        .all();
+      const adapter = getDbAdapter();
+      const dbType = getDbType();
+      
+      let organizations;
+      if (dbType === 'postgres') {
+        const result = await adapter.query('SELECT * FROM organizations ORDER BY name');
+        organizations = result.rows;
+      } else {
+        const db = getDb();
+        organizations = db.prepare('SELECT * FROM organizations ORDER BY name').all();
+      }
+      
       return NextResponse.json({ organizations });
     }
 
