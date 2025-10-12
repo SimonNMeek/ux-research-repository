@@ -1,0 +1,274 @@
+/**
+ * API Key Authentication for LLM Integration
+ * Provides Bearer token authentication for REST API endpoints
+ */
+
+import { hashSync, compareSync } from 'bcryptjs';
+import { getDbAdapter, getDbType } from '@/db/adapter';
+import { getDb } from '@/db';
+
+export interface ApiKeyUser {
+  id: number;
+  email: string;
+  name: string;
+  system_role?: string;
+  api_key_id: number;
+}
+
+/**
+ * Generate a new API key
+ * Format: sk-{random32chars} (similar to OpenAI format)
+ */
+export function generateApiKey(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let key = 'sk-';
+  for (let i = 0; i < 48; i++) {
+    key += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return key;
+}
+
+/**
+ * Hash an API key for storage
+ */
+export function hashApiKey(key: string): string {
+  return hashSync(key, 10);
+}
+
+/**
+ * Create a new API key for a user
+ */
+export async function createApiKey(
+  userId: number,
+  name: string,
+  expiresAt?: Date
+): Promise<{ key: string; prefix: string; id: number }> {
+  const adapter = getDbAdapter();
+  const dbType = getDbType();
+  
+  const key = generateApiKey();
+  const keyHash = hashApiKey(key);
+  const keyPrefix = key.substring(0, 12); // sk-XXXXXXXX for display
+
+  let keyId: number;
+  if (dbType === 'postgres') {
+    const result = await adapter.query(
+      `INSERT INTO api_keys (user_id, key_hash, key_prefix, name, expires_at)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [userId, keyHash, keyPrefix, name, expiresAt || null]
+    );
+    keyId = result.rows[0].id;
+  } else {
+    const db = getDb();
+    const result = db
+      .prepare(
+        `INSERT INTO api_keys (user_id, key_hash, key_prefix, name, expires_at)
+         VALUES (?, ?, ?, ?, ?)`
+      )
+      .run(userId, keyHash, keyPrefix, name, expiresAt?.toISOString() || null);
+    keyId = result.lastInsertRowid as number;
+  }
+
+  return { key, prefix: keyPrefix, id: keyId };
+}
+
+/**
+ * Validate an API key and return the associated user
+ */
+export async function validateApiKey(key: string): Promise<ApiKeyUser | null> {
+  if (!key || !key.startsWith('sk-')) {
+    return null;
+  }
+
+  const adapter = getDbAdapter();
+  const dbType = getDbType();
+
+  // Get all active API keys (we need to check each hash)
+  // In production, you'd want to optimize this with a better lookup strategy
+  let apiKeys: any[];
+  if (dbType === 'postgres') {
+    const result = await adapter.query(
+      `SELECT ak.id as api_key_id, ak.key_hash, ak.expires_at,
+              u.id, u.email, u.name, u.system_role
+       FROM api_keys ak
+       INNER JOIN users u ON ak.user_id = u.id
+       WHERE ak.is_active = true 
+       AND (ak.expires_at IS NULL OR ak.expires_at > CURRENT_TIMESTAMP)
+       AND u.is_active = true`
+    );
+    apiKeys = result.rows;
+  } else {
+    const db = getDb();
+    apiKeys = db
+      .prepare(
+        `SELECT ak.id as api_key_id, ak.key_hash, ak.expires_at,
+                u.id, u.email, u.name, u.system_role
+         FROM api_keys ak
+         INNER JOIN users u ON ak.user_id = u.id
+         WHERE ak.is_active = 1 
+         AND (ak.expires_at IS NULL OR ak.expires_at > CURRENT_TIMESTAMP)
+         AND u.is_active = 1`
+      )
+      .all();
+  }
+
+  // Check each key hash
+  for (const apiKey of apiKeys) {
+    if (compareSync(key, apiKey.key_hash)) {
+      // Update last_used_at
+      if (dbType === 'postgres') {
+        await adapter.query(
+          `UPDATE api_keys SET last_used_at = CURRENT_TIMESTAMP WHERE id = $1`,
+          [apiKey.api_key_id]
+        );
+      } else {
+        const db = getDb();
+        db.prepare(`UPDATE api_keys SET last_used_at = CURRENT_TIMESTAMP WHERE id = ?`).run(
+          apiKey.api_key_id
+        );
+      }
+
+      return {
+        id: apiKey.id,
+        email: apiKey.email,
+        name: apiKey.name,
+        system_role: apiKey.system_role,
+        api_key_id: apiKey.api_key_id,
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * List all API keys for a user (without showing the actual keys)
+ */
+export async function listApiKeys(userId: number): Promise<
+  Array<{
+    id: number;
+    name: string;
+    key_prefix: string;
+    last_used_at: string | null;
+    created_at: string;
+    expires_at: string | null;
+    is_active: boolean;
+  }>
+> {
+  const adapter = getDbAdapter();
+  const dbType = getDbType();
+
+  let keys: any[];
+  if (dbType === 'postgres') {
+    const result = await adapter.query(
+      `SELECT id, name, key_prefix, last_used_at, created_at, expires_at, is_active
+       FROM api_keys
+       WHERE user_id = $1
+       ORDER BY created_at DESC`,
+      [userId]
+    );
+    keys = result.rows;
+  } else {
+    const db = getDb();
+    keys = db
+      .prepare(
+        `SELECT id, name, key_prefix, last_used_at, created_at, expires_at, is_active
+         FROM api_keys
+         WHERE user_id = ?
+         ORDER BY created_at DESC`
+      )
+      .all(userId);
+  }
+
+  return keys;
+}
+
+/**
+ * Revoke (deactivate) an API key
+ */
+export async function revokeApiKey(keyId: number, userId: number): Promise<boolean> {
+  const adapter = getDbAdapter();
+  const dbType = getDbType();
+
+  if (dbType === 'postgres') {
+    const result = await adapter.query(
+      `UPDATE api_keys SET is_active = false WHERE id = $1 AND user_id = $2`,
+      [keyId, userId]
+    );
+    return result.rowCount ? result.rowCount > 0 : false;
+  } else {
+    const db = getDb();
+    const result = db
+      .prepare(`UPDATE api_keys SET is_active = 0 WHERE id = ? AND user_id = ?`)
+      .run(keyId, userId);
+    return result.changes > 0;
+  }
+}
+
+/**
+ * Delete an API key permanently
+ */
+export async function deleteApiKey(keyId: number, userId: number): Promise<boolean> {
+  const adapter = getDbAdapter();
+  const dbType = getDbType();
+
+  if (dbType === 'postgres') {
+    const result = await adapter.query(
+      `DELETE FROM api_keys WHERE id = $1 AND user_id = $2`,
+      [keyId, userId]
+    );
+    return result.rowCount ? result.rowCount > 0 : false;
+  } else {
+    const db = getDb();
+    const result = db.prepare(`DELETE FROM api_keys WHERE id = ? AND user_id = ?`).run(keyId, userId);
+    return result.changes > 0;
+  }
+}
+
+/**
+ * Track API usage for rate limiting and analytics
+ */
+export async function trackApiUsage(
+  apiKeyId: number,
+  endpoint: string,
+  workspaceId?: number
+): Promise<void> {
+  const adapter = getDbAdapter();
+  const dbType = getDbType();
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+  if (dbType === 'postgres') {
+    // Use INSERT ... ON CONFLICT to increment count
+    await adapter.query(
+      `INSERT INTO api_key_usage (api_key_id, endpoint, workspace_id, date, request_count)
+       VALUES ($1, $2, $3, $4, 1)
+       ON CONFLICT (api_key_id, endpoint, date, workspace_id) 
+       DO UPDATE SET request_count = api_key_usage.request_count + 1`,
+      [apiKeyId, endpoint, workspaceId || null, today]
+    );
+  } else {
+    const db = getDb();
+    // Check if entry exists
+    const existing = db
+      .prepare(
+        `SELECT id, request_count FROM api_key_usage 
+         WHERE api_key_id = ? AND endpoint = ? AND date = ? AND workspace_id IS ?`
+      )
+      .get(apiKeyId, endpoint, today, workspaceId || null) as
+      | { id: number; request_count: number }
+      | undefined;
+
+    if (existing) {
+      db.prepare(`UPDATE api_key_usage SET request_count = ? WHERE id = ?`).run(
+        existing.request_count + 1,
+        existing.id
+      );
+    } else {
+      db.prepare(
+        `INSERT INTO api_key_usage (api_key_id, endpoint, workspace_id, date, request_count)
+         VALUES (?, ?, ?, ?, 1)`
+      ).run(apiKeyId, endpoint, workspaceId || null, today);
+    }
+  }
+}
+

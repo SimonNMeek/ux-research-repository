@@ -40,6 +40,37 @@ CREATE TABLE IF NOT EXISTS user_sessions (
 CREATE INDEX idx_user_sessions_user_id ON user_sessions(user_id);
 CREATE INDEX idx_user_sessions_expires_at ON user_sessions(expires_at);
 
+-- API keys for LLM integrations
+CREATE TABLE IF NOT EXISTS api_keys (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  key_hash VARCHAR(255) NOT NULL UNIQUE,
+  key_prefix VARCHAR(20) NOT NULL, -- First 8 chars for display (e.g., "sk-1234...")
+  name VARCHAR(255) NOT NULL, -- User-friendly name like "ChatGPT Integration"
+  last_used_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMP,
+  is_active BOOLEAN DEFAULT true
+);
+
+CREATE INDEX idx_api_keys_user_id ON api_keys(user_id);
+CREATE INDEX idx_api_keys_key_hash ON api_keys(key_hash);
+CREATE INDEX idx_api_keys_active ON api_keys(is_active);
+
+-- API usage tracking (for rate limiting and analytics)
+CREATE TABLE IF NOT EXISTS api_key_usage (
+  id SERIAL PRIMARY KEY,
+  api_key_id INTEGER NOT NULL REFERENCES api_keys(id) ON DELETE CASCADE,
+  endpoint VARCHAR(255) NOT NULL,
+  workspace_id INTEGER REFERENCES workspaces(id) ON DELETE SET NULL,
+  request_count INTEGER DEFAULT 1,
+  date DATE NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_api_key_usage_key_date ON api_key_usage(api_key_id, date);
+CREATE INDEX idx_api_key_usage_workspace ON api_key_usage(workspace_id, date);
+
 -- =============================================================================
 -- MULTI-TENANCY: ORGANIZATIONS
 -- =============================================================================
