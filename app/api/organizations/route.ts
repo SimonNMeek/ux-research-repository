@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if slug already exists
-    const existing = organizationRepo.getBySlug(slug);
+    const existing = await organizationRepo.getBySlug(slug);
     if (existing) {
       return NextResponse.json(
         { error: 'Slug already exists' },
@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create organization
-    const organization = organizationRepo.create({
+    const organization = await organizationRepo.create({
       slug,
       name,
       billing_email: billing_email || user.email,
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Grant creator as owner
-    organizationRepo.addUser(organization.id, user.id, 'owner', user.id);
+    await organizationRepo.addUser(organization.id, user.id, 'owner', user.id);
 
     return NextResponse.json({ organization }, { status: 201 });
   } catch (error: any) {
