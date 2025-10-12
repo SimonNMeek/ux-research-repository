@@ -291,15 +291,21 @@ export default function Header() {
               <User className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
               Profile
             </button>
+
+            <button 
+              onClick={() => {
+                setDropdownOpen(false);
+                router.push('/profile/api-keys');
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+            >
+              <CreditCard className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
+              API Keys
+            </button>
             
             <button className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center">
               <Settings className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
               Settings
-            </button>
-            
-            <button className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center">
-              <CreditCard className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
-              Accounts & Billing
             </button>
             
             {/* Admin Section */}
