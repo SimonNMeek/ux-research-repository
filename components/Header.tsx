@@ -316,6 +316,16 @@ export default function Header() {
                   <Shield className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
                   User Management
                 </button>
+                <button 
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    router.push('/admin/organizations');
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                >
+                  <Building2 className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
+                  Organizations
+                </button>
               </>
             )}
             

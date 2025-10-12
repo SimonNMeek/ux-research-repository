@@ -5,12 +5,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Building2, Loader2 } from 'lucide-react';
 
 interface CreateWorkspaceModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onWorkspaceCreated?: (workspace: { id: number; slug: string; name: string }) => void;
+}
+
+interface Organization {
+  id: number;
+  name: string;
+  slug: string;
 }
 
 export default function CreateWorkspaceModal({ open, onOpenChange, onWorkspaceCreated }: CreateWorkspaceModalProps) {
@@ -20,23 +27,32 @@ export default function CreateWorkspaceModal({ open, onOpenChange, onWorkspaceCr
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [organizationId, setOrganizationId] = useState<number | null>(null);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [loadingOrgs, setLoadingOrgs] = useState(false);
 
   // Fetch user's organizations when modal opens
   useEffect(() => {
-    if (open && !organizationId) {
+    if (open && organizations.length === 0) {
+      setLoadingOrgs(true);
       fetch('/api/organizations')
         .then(res => res.json())
         .then(data => {
           if (data.organizations && data.organizations.length > 0) {
+            setOrganizations(data.organizations);
             setOrganizationId(data.organizations[0].id);
+          } else {
+            setError('No organizations found. Please contact an administrator.');
           }
         })
         .catch(err => {
           console.error('Failed to fetch organizations:', err);
           setError('Failed to load organizations');
+        })
+        .finally(() => {
+          setLoadingOrgs(false);
         });
     }
-  }, [open, organizationId]);
+  }, [open, organizations.length]);
 
   // Auto-generate slug from name
   const generateSlug = (name: string) => {
@@ -159,6 +175,44 @@ export default function CreateWorkspaceModal({ open, onOpenChange, onWorkspaceCr
               placeholder="Brief description of this workspace"
               disabled={creating}
             />
+          </div>
+
+          <div>
+            <Label htmlFor="organization">Organization</Label>
+            {loadingOrgs ? (
+              <div className="flex items-center gap-2 py-2 text-sm text-gray-500">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading organizations...
+              </div>
+            ) : organizations.length > 1 ? (
+              <Select
+                value={organizationId?.toString()}
+                onValueChange={(value) => setOrganizationId(parseInt(value))}
+                disabled={creating}
+              >
+                <SelectTrigger id="organization">
+                  <SelectValue placeholder="Select an organization" />
+                </SelectTrigger>
+                <SelectContent>
+                  {organizations.map((org) => (
+                    <SelectItem key={org.id} value={org.id.toString()}>
+                      {org.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : organizations.length === 1 ? (
+              <div className="py-2 px-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-sm text-gray-700 dark:text-gray-300">
+                {organizations[0].name}
+              </div>
+            ) : (
+              <div className="py-2 px-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">
+                No organizations available
+              </div>
+            )}
+            <p className="text-xs text-gray-500 mt-1">
+              Workspace will be created within this organization
+            </p>
           </div>
 
           {error && (
