@@ -103,28 +103,47 @@ export class OrganizationRepo {
   /**
    * Create a new organization
    */
-  create(data: {
+  async create(data: {
     slug: string;
     name: string;
     billing_email?: string;
     plan?: 'free' | 'pro' | 'enterprise';
     metadata?: Record<string, any>;
-  }): Organization {
+  }): Promise<Organization> {
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
     const metadata = JSON.stringify(data.metadata || {});
     
-    const result = this.db
-      .prepare(`
+    let result: any;
+    if (dbType === 'postgres') {
+      const queryResult = await adapter.query(`
         INSERT INTO organizations (slug, name, billing_email, plan, metadata)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING *
-      `)
-      .get(
+      `, [
         data.slug,
         data.name,
         data.billing_email || null,
         data.plan || 'free',
         metadata
-      ) as any;
+      ]);
+      result = queryResult.rows[0];
+    } else {
+      const db = getDb();
+      result = db
+        .prepare(`
+          INSERT INTO organizations (slug, name, billing_email, plan, metadata)
+          VALUES (?, ?, ?, ?, ?)
+          RETURNING *
+        `)
+        .get(
+          data.slug,
+          data.name,
+          data.billing_email || null,
+          data.plan || 'free',
+          metadata
+        );
+    }
     
     return this.mapRow(result);
   }
@@ -132,63 +151,83 @@ export class OrganizationRepo {
   /**
    * Update organization
    */
-  update(id: number, data: {
+  async update(id: number, data: {
     name?: string;
+    slug?: string;
     billing_email?: string;
     plan?: 'free' | 'pro' | 'enterprise';
     max_workspaces?: number;
     max_users?: number;
     max_documents?: number;
     metadata?: Record<string, any>;
-  }): Organization | null {
+  }): Promise<Organization | null> {
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
+    
     const updates: string[] = [];
     const values: any[] = [];
+    let paramCounter = 1;
     
     if (data.name !== undefined) {
-      updates.push('name = ?');
+      updates.push(dbType === 'postgres' ? `name = $${paramCounter++}` : 'name = ?');
       values.push(data.name);
     }
     
+    if (data.slug !== undefined) {
+      updates.push(dbType === 'postgres' ? `slug = $${paramCounter++}` : 'slug = ?');
+      values.push(data.slug);
+    }
+    
     if (data.billing_email !== undefined) {
-      updates.push('billing_email = ?');
+      updates.push(dbType === 'postgres' ? `billing_email = $${paramCounter++}` : 'billing_email = ?');
       values.push(data.billing_email);
     }
     
     if (data.plan !== undefined) {
-      updates.push('plan = ?');
+      updates.push(dbType === 'postgres' ? `plan = $${paramCounter++}` : 'plan = ?');
       values.push(data.plan);
     }
     
     if (data.max_workspaces !== undefined) {
-      updates.push('max_workspaces = ?');
+      updates.push(dbType === 'postgres' ? `max_workspaces = $${paramCounter++}` : 'max_workspaces = ?');
       values.push(data.max_workspaces);
     }
     
     if (data.max_users !== undefined) {
-      updates.push('max_users = ?');
+      updates.push(dbType === 'postgres' ? `max_users = $${paramCounter++}` : 'max_users = ?');
       values.push(data.max_users);
     }
     
     if (data.max_documents !== undefined) {
-      updates.push('max_documents = ?');
+      updates.push(dbType === 'postgres' ? `max_documents = $${paramCounter++}` : 'max_documents = ?');
       values.push(data.max_documents);
     }
     
     if (data.metadata !== undefined) {
-      updates.push('metadata = ?');
+      updates.push(dbType === 'postgres' ? `metadata = $${paramCounter++}` : 'metadata = ?');
       values.push(JSON.stringify(data.metadata));
     }
     
     if (updates.length === 0) {
-      return this.getById(id);
+      return await this.getById(id);
     }
     
     updates.push('updated_at = CURRENT_TIMESTAMP');
     values.push(id);
     
-    const result = this.db
-      .prepare(`UPDATE organizations SET ${updates.join(', ')} WHERE id = ? RETURNING *`)
-      .get(...values) as any;
+    let result: any;
+    if (dbType === 'postgres') {
+      const queryResult = await adapter.query(
+        `UPDATE organizations SET ${updates.join(', ')} WHERE id = $${paramCounter} RETURNING *`,
+        values
+      );
+      result = queryResult.rows[0];
+    } else {
+      const db = getDb();
+      result = db
+        .prepare(`UPDATE organizations SET ${updates.join(', ')} WHERE id = ? RETURNING *`)
+        .get(...values);
+    }
     
     if (!result) return null;
     
@@ -226,13 +265,43 @@ export class OrganizationRepo {
   /**
    * Add user to organization
    */
-  addUser(organizationId: number, userId: number, role: 'owner' | 'admin' | 'member', invitedBy: number): void {
-    this.db
-      .prepare(`
+  async addUser(organizationId: number, userId: number, role: 'owner' | 'admin' | 'member', invitedBy: number): Promise<void> {
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
+    
+    if (dbType === 'postgres') {
+      await adapter.query(`
+        INSERT INTO user_organizations (organization_id, user_id, role, invited_by)
+        VALUES ($1, $2, $3, $4)
+      `, [organizationId, userId, role, invitedBy]);
+    } else {
+      const db = getDb();
+      db.prepare(`
         INSERT INTO user_organizations (organization_id, user_id, role, invited_by)
         VALUES (?, ?, ?, ?)
-      `)
-      .run(organizationId, userId, role, invitedBy);
+      `).run(organizationId, userId, role, invitedBy);
+    }
+  }
+
+  /**
+   * Delete organization
+   */
+  async delete(id: number): Promise<void> {
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
+    
+    if (dbType === 'postgres') {
+      // Delete user associations first
+      await adapter.query('DELETE FROM user_organizations WHERE organization_id = $1', [id]);
+      // Delete organization
+      await adapter.query('DELETE FROM organizations WHERE id = $1', [id]);
+    } else {
+      const db = getDb();
+      // Delete user associations first
+      db.prepare('DELETE FROM user_organizations WHERE organization_id = ?').run(id);
+      // Delete organization
+      db.prepare('DELETE FROM organizations WHERE id = ?').run(id);
+    }
   }
 
   /**
