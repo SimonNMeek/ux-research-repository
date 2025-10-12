@@ -1,18 +1,22 @@
 import { NextRequest } from 'next/server';
 import { withWorkspace, WorkspaceRouteHandler, workspaceResolver } from '@/src/server/workspace-resolver';
+import { getDbAdapter, getDbType } from '@/db/adapter';
 import { getDb } from '@/db';
 
 export const runtime = 'nodejs';
 
 const handler: WorkspaceRouteHandler = async (context, req) => {
   const { workspace, user } = context;
-  const db = getDb();
 
   // GET - List users with access to workspace
   if (req.method === 'GET') {
     try {
-      const users = db
-        .prepare(`
+      const adapter = getDbAdapter();
+      const dbType = getDbType();
+
+      let users: any[];
+      if (dbType === 'postgres') {
+        const result = await adapter.query(`
           SELECT 
             u.id,
             u.email,
@@ -25,10 +29,31 @@ const handler: WorkspaceRouteHandler = async (context, req) => {
             uw.granted_by
           FROM users u
           INNER JOIN user_workspaces uw ON u.id = uw.user_id
-          WHERE uw.workspace_id = ?
+          WHERE uw.workspace_id = $1
           ORDER BY u.name
-        `)
-        .all(workspace.id);
+        `, [workspace.id]);
+        users = result.rows;
+      } else {
+        const db = getDb();
+        users = db
+          .prepare(`
+            SELECT 
+              u.id,
+              u.email,
+              u.name,
+              u.first_name,
+              u.last_name,
+              u.system_role,
+              uw.role as workspace_role,
+              uw.granted_at,
+              uw.granted_by
+            FROM users u
+            INNER JOIN user_workspaces uw ON u.id = uw.user_id
+            WHERE uw.workspace_id = ?
+            ORDER BY u.name
+          `)
+          .all(workspace.id);
+      }
 
       return new Response(
         JSON.stringify({ users }),
@@ -71,10 +96,20 @@ const handler: WorkspaceRouteHandler = async (context, req) => {
         );
       }
 
+      const adapter = getDbAdapter();
+      const dbType = getDbType();
+
       // Find user by email
-      const targetUser = db
-        .prepare('SELECT id, email, name FROM users WHERE email = ?')
-        .get(email) as { id: number; email: string; name: string } | undefined;
+      let targetUser: { id: number; email: string; name: string } | undefined;
+      if (dbType === 'postgres') {
+        const result = await adapter.query('SELECT id, email, name FROM users WHERE email = $1', [email]);
+        targetUser = result.rows[0] as { id: number; email: string; name: string } | undefined;
+      } else {
+        const db = getDb();
+        targetUser = db
+          .prepare('SELECT id, email, name FROM users WHERE email = ?')
+          .get(email) as { id: number; email: string; name: string } | undefined;
+      }
 
       if (!targetUser) {
         return new Response(
@@ -84,9 +119,16 @@ const handler: WorkspaceRouteHandler = async (context, req) => {
       }
 
       // Check if user already has access
-      const existing = db
-        .prepare('SELECT role FROM user_workspaces WHERE user_id = ? AND workspace_id = ?')
-        .get(targetUser.id, workspace.id) as { role: string } | undefined;
+      let existing: { role: string } | undefined;
+      if (dbType === 'postgres') {
+        const result = await adapter.query('SELECT role FROM user_workspaces WHERE user_id = $1 AND workspace_id = $2', [targetUser.id, workspace.id]);
+        existing = result.rows[0] as { role: string } | undefined;
+      } else {
+        const db = getDb();
+        existing = db
+          .prepare('SELECT role FROM user_workspaces WHERE user_id = ? AND workspace_id = ?')
+          .get(targetUser.id, workspace.id) as { role: string } | undefined;
+      }
 
       if (existing) {
         return new Response(
@@ -99,10 +141,18 @@ const handler: WorkspaceRouteHandler = async (context, req) => {
       }
 
       // Grant access
-      db.prepare(`
-        INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by)
-        VALUES (?, ?, ?, ?)
-      `).run(targetUser.id, workspace.id, role, user.id);
+      if (dbType === 'postgres') {
+        await adapter.query(`
+          INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by)
+          VALUES ($1, $2, $3, $4)
+        `, [targetUser.id, workspace.id, role, user.id]);
+      } else {
+        const db = getDb();
+        db.prepare(`
+          INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by)
+          VALUES (?, ?, ?, ?)
+        `).run(targetUser.id, workspace.id, role, user.id);
+      }
 
       return new Response(
         JSON.stringify({ 
@@ -154,16 +204,31 @@ const handler: WorkspaceRouteHandler = async (context, req) => {
         );
       }
 
-      // Remove access
-      const result = db
-        .prepare('DELETE FROM user_workspaces WHERE user_id = ? AND workspace_id = ?')
-        .run(parseInt(userIdToRemove), workspace.id);
+      const adapter = getDbAdapter();
+      const dbType = getDbType();
 
-      if (result.changes === 0) {
-        return new Response(
-          JSON.stringify({ error: 'User does not have access to this workspace' }),
-          { status: 404, headers: { 'content-type': 'application/json' } }
-        );
+      // Remove access
+      let result: any;
+      if (dbType === 'postgres') {
+        result = await adapter.query('DELETE FROM user_workspaces WHERE user_id = $1 AND workspace_id = $2', [parseInt(userIdToRemove), workspace.id]);
+        if (result.rowCount === 0) {
+          return new Response(
+            JSON.stringify({ error: 'User does not have access to this workspace' }),
+            { status: 404, headers: { 'content-type': 'application/json' } }
+          );
+        }
+      } else {
+        const db = getDb();
+        result = db
+          .prepare('DELETE FROM user_workspaces WHERE user_id = ? AND workspace_id = ?')
+          .run(parseInt(userIdToRemove), workspace.id);
+
+        if (result.changes === 0) {
+          return new Response(
+            JSON.stringify({ error: 'User does not have access to this workspace' }),
+            { status: 404, headers: { 'content-type': 'application/json' } }
+          );
+        }
       }
 
       return new Response(
@@ -218,16 +283,31 @@ const handler: WorkspaceRouteHandler = async (context, req) => {
         );
       }
 
-      // Update role
-      const result = db
-        .prepare('UPDATE user_workspaces SET role = ? WHERE user_id = ? AND workspace_id = ?')
-        .run(role, parseInt(userId), workspace.id);
+      const adapter = getDbAdapter();
+      const dbType = getDbType();
 
-      if (result.changes === 0) {
-        return new Response(
-          JSON.stringify({ error: 'User does not have access to this workspace' }),
-          { status: 404, headers: { 'content-type': 'application/json' } }
-        );
+      // Update role
+      let result: any;
+      if (dbType === 'postgres') {
+        result = await adapter.query('UPDATE user_workspaces SET role = $1 WHERE user_id = $2 AND workspace_id = $3', [role, parseInt(userId), workspace.id]);
+        if (result.rowCount === 0) {
+          return new Response(
+            JSON.stringify({ error: 'User does not have access to this workspace' }),
+            { status: 404, headers: { 'content-type': 'application/json' } }
+          );
+        }
+      } else {
+        const db = getDb();
+        result = db
+          .prepare('UPDATE user_workspaces SET role = ? WHERE user_id = ? AND workspace_id = ?')
+          .run(role, parseInt(userId), workspace.id);
+
+        if (result.changes === 0) {
+          return new Response(
+            JSON.stringify({ error: 'User does not have access to this workspace' }),
+            { status: 404, headers: { 'content-type': 'application/json' } }
+          );
+        }
       }
 
       return new Response(
