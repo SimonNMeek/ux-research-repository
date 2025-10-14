@@ -208,7 +208,7 @@ export default function Controls({
               className="w-full justify-start"
             >
               <Star className={`w-4 h-4 mr-2 ${favoritesOnly ? 'fill-current' : ''}`} />
-              Favorites only
+              Favourites only
             </Button>
           </div>
 

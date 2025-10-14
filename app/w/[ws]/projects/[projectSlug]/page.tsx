@@ -52,7 +52,7 @@ export default function ProjectPage() {
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [tagFilter, setTagFilter] = useState('');
-  const [sortBy, setSortBy] = useState<'date-newest' | 'date-oldest' | 'favorites-first'>('date-newest');
+  const [sortBy, setSortBy] = useState<'date-newest' | 'date-oldest' | 'favourites-first'>('date-newest');
   
   // Upload state - atomic initialization
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
@@ -160,7 +160,7 @@ export default function ProjectPage() {
       switch (sortBy) {
         case 'date-oldest':
           return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-        case 'favorites-first':
+        case 'favourites-first':
           if (a.is_favorite && !b.is_favorite) return -1;
           if (!a.is_favorite && b.is_favorite) return 1;
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -297,7 +297,7 @@ export default function ProjectPage() {
             ? { ...doc, is_favorite: !doc.is_favorite }
             : doc
         ));
-        throw new Error('Failed to toggle favorite');
+        throw new Error('Failed to toggle favourite');
       }
     } catch (err: any) {
       alert(err.message);
@@ -766,7 +766,7 @@ export default function ProjectPage() {
               <SelectContent>
                 <SelectItem value="date-newest">Date (newest first)</SelectItem>
                 <SelectItem value="date-oldest">Date (oldest first)</SelectItem>
-                <SelectItem value="favorites-first">Favourites first</SelectItem>
+                <SelectItem value="favourites-first">Favourites first</SelectItem>
               </SelectContent>
             </Select>
           </div>

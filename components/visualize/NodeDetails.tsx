@@ -51,7 +51,7 @@ export default function NodeDetails({
         onFavoriteToggle(node.id);
       }
     } catch (error) {
-      console.error('Failed to toggle favorite:', error);
+      console.error('Failed to toggle favourite:', error);
     } finally {
       setToggling(false);
     }
@@ -128,7 +128,7 @@ export default function NodeDetails({
                   className="flex items-center gap-2"
                 >
                   <Heart className={`w-4 h-4 ${node.favorite ? 'fill-red-500 text-red-500' : ''}`} />
-                  {node.favorite ? 'Unfavorite' : 'Favorite'}
+                  {node.favorite ? 'Unfavourite' : 'Favourite'}
                 </Button>
                 <Button
                   size="sm"

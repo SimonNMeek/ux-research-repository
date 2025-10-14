@@ -311,27 +311,47 @@ export class DocumentRepo {
     };
   }
 
-  // Toggle favorite status with workspace validation
+  // Toggle favourite status with workspace validation
   toggleFavorite(id: number, workspaceId: number): { is_favorite: boolean } {
-    const result = this.getDbConnection()
-      .prepare(`
+    const db = this.getDbConnection();
+    
+    // Use a transaction to handle the FTS trigger issue
+    const result = db.transaction(() => {
+      // First, check if document exists and get current status
+      const current = db.prepare(`
+        SELECT d.is_favorite 
+        FROM documents d
+        WHERE d.id = ? 
+        AND d.project_id IN (
+          SELECT p.id FROM projects p WHERE p.workspace_id = ?
+        )
+      `).get(id, workspaceId) as any;
+      
+      if (!current) {
+        throw new Error('Document not found or access denied');
+      }
+      
+      // Toggle the favourite status
+      const newStatus = !current.is_favorite;
+      
+      // Update the document
+      const updateResult = db.prepare(`
         UPDATE documents 
-        SET is_favorite = NOT is_favorite 
+        SET is_favorite = ? 
         WHERE id = ? 
         AND project_id IN (
-          SELECT id FROM projects WHERE workspace_id = ?
+          SELECT p.id FROM projects p WHERE p.workspace_id = ?
         )
-        RETURNING is_favorite
-      `)
-      .get(id, workspaceId) as any;
+      `).run(newStatus ? 1 : 0, id, workspaceId);
+      
+      if (updateResult.changes === 0) {
+        throw new Error('Document not found or access denied');
+      }
+      
+      return { is_favorite: newStatus };
+    })();
     
-    if (!result) {
-      throw new Error('Document not found or access denied');
-    }
-    
-    return {
-      is_favorite: Boolean(result.is_favorite)
-    };
+    return result;
   }
 
   // Get favorite documents
