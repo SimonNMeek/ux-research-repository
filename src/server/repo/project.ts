@@ -95,16 +95,34 @@ export class ProjectRepo {
     });
   }
 
-  getBySlug(workspaceId: number, slug: string): Project | null {
-    const row = this.getDbConnection()
-      .prepare('SELECT * FROM projects WHERE workspace_id = ? AND slug = ?')
-      .get(workspaceId, slug) as any;
+  async getBySlug(workspaceId: number, slug: string): Promise<Project | null> {
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
+    
+    let row: any;
+    if (dbType === 'postgres') {
+      const result = await adapter.query('SELECT * FROM projects WHERE workspace_id = $1 AND slug = $2', [workspaceId, slug]);
+      row = result.rows[0];
+    } else {
+      const db = this.getDbConnection();
+      row = db.prepare('SELECT * FROM projects WHERE workspace_id = ? AND slug = ?').get(workspaceId, slug);
+    }
     
     if (!row) return null;
     
+    // Handle metadata - PostgreSQL returns JSON objects, SQLite returns strings
+    let metadata = {};
+    if (row.metadata) {
+      if (typeof row.metadata === 'string') {
+        metadata = JSON.parse(row.metadata);
+      } else {
+        metadata = row.metadata;
+      }
+    }
+    
     return {
       ...row,
-      metadata: JSON.parse(row.metadata || '{}')
+      metadata
     };
   }
 
@@ -121,31 +139,60 @@ export class ProjectRepo {
     };
   }
 
-  create(workspaceId: number, data: { 
+  async create(workspaceId: number, data: { 
     slug: string; 
     name: string; 
     description?: string;
     metadata?: Record<string, any>;
-  }): Project {
+  }): Promise<Project> {
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
     const metadata = JSON.stringify(data.metadata || {});
     
-    const result = this.getDbConnection()
-      .prepare(`
+    let result: any;
+    if (dbType === 'postgres') {
+      const queryResult = await adapter.query(`
         INSERT INTO projects (workspace_id, slug, name, description, metadata) 
-        VALUES (?, ?, ?, ?, ?) 
+        VALUES ($1, $2, $3, $4, $5) 
         RETURNING *
-      `)
-      .get(
+      `, [
         workspaceId,
         data.slug,
         data.name,
         data.description || '',
         metadata
-      ) as any;
+      ]);
+      result = queryResult.rows[0];
+    } else {
+      const db = this.getDbConnection();
+      result = db
+        .prepare(`
+          INSERT INTO projects (workspace_id, slug, name, description, metadata) 
+          VALUES (?, ?, ?, ?, ?) 
+          RETURNING *
+        `)
+        .get(
+          workspaceId,
+          data.slug,
+          data.name,
+          data.description || '',
+          metadata
+        );
+    }
+    
+    // Handle metadata - PostgreSQL returns JSON objects, SQLite returns strings
+    let parsedMetadata = {};
+    if (result.metadata) {
+      if (typeof result.metadata === 'string') {
+        parsedMetadata = JSON.parse(result.metadata);
+      } else {
+        parsedMetadata = result.metadata;
+      }
+    }
     
     return {
       ...result,
-      metadata: JSON.parse(result.metadata || '{}')
+      metadata: parsedMetadata
     };
   }
 

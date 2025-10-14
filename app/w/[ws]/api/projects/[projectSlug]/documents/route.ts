@@ -16,7 +16,7 @@ const handler: WorkspaceRouteHandler = async (context, req, routeParams) => {
   const { projectSlug } = resolved;
 
   // Validate project exists and belongs to workspace
-  const project = projectRepo.getBySlug(workspace.id, projectSlug);
+  const project = await projectRepo.getBySlug(workspace.id, projectSlug);
   if (!project) {
     return new Response(
       JSON.stringify({ error: 'Project not found' }),
@@ -30,16 +30,16 @@ const handler: WorkspaceRouteHandler = async (context, req, routeParams) => {
       const limit = parseInt(url.searchParams.get('limit') || '50');
       const offset = parseInt(url.searchParams.get('offset') || '0');
 
-      const documents = documentRepo.list(project.id, { limit, offset });
+      const documents = await documentRepo.list(project.id, { limit, offset });
       
       // Get tags for each document
-      const documentsWithTags = documents.map(doc => ({
+      const documentsWithTags = await Promise.all(documents.map(async doc => ({
         ...doc,
-        tags: tagRepo.getForDocument(doc.id).map(tag => ({
+        tags: (await tagRepo.getForDocument(doc.id)).map(tag => ({
           id: tag.id,
           name: tag.name
         }))
-      }));
+      })));
 
       return new Response(
         JSON.stringify({ 
@@ -102,7 +102,7 @@ const handler: WorkspaceRouteHandler = async (context, req, routeParams) => {
       }
 
       // Create document
-      const document = documentRepo.create(project.id, {
+      const document = await documentRepo.create(project.id, {
         title,
         body: processedBody,
         source_url,
@@ -111,18 +111,21 @@ const handler: WorkspaceRouteHandler = async (context, req, routeParams) => {
 
       // Handle tags if provided
       if (tags && Array.isArray(tags) && tags.length > 0) {
-        const tagIds = tagRepo.upsertMany(workspace.id, tags);
-        tagRepo.attach(document.id, tagIds);
+        const tagIds = await tagRepo.upsertMany(workspace.id, tags);
+        await tagRepo.attach(document.id, tagIds);
       }
 
       // Get document with tags for response
-      const documentTags = tagRepo.getForDocument(document.id);
+      const documentTags = await tagRepo.getForDocument(document.id);
 
       return new Response(
         JSON.stringify({ 
           document: {
             ...document,
-            tags: documentTags.map(tag => tag.name)
+            tags: documentTags.map(tag => ({
+              id: tag.id,
+              name: tag.name
+            }))
           }
         }),
         {

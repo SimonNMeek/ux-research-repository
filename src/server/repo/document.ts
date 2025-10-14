@@ -27,7 +27,7 @@ export class DocumentRepo {
     return getDb();
   }
 
-  create(projectId: number, data: {
+  async create(projectId: number, data: {
     title: string;
     body: string;
     original_text?: string;
@@ -36,17 +36,20 @@ export class DocumentRepo {
     author?: string;
     anonymization_profile_id?: string;
     clean_version?: number;
-  }): Document {
-    const result = this.getDbConnection()
-      .prepare(`
+  }): Promise<Document> {
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
+    
+    let result: any;
+    if (dbType === 'postgres') {
+      const queryResult = await adapter.query(`
         INSERT INTO documents (
           project_id, title, body, original_text, clean_text, 
           source_url, author, anonymization_profile_id, clean_version
         ) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
         RETURNING *
-      `)
-      .get(
+      `, [
         projectId,
         data.title,
         data.body,
@@ -56,7 +59,31 @@ export class DocumentRepo {
         data.author || null,
         data.anonymization_profile_id || null,
         data.clean_version || 0
-      ) as any;
+      ]);
+      result = queryResult.rows[0];
+    } else {
+      const db = this.getDbConnection();
+      result = db
+        .prepare(`
+          INSERT INTO documents (
+            project_id, title, body, original_text, clean_text, 
+            source_url, author, anonymization_profile_id, clean_version
+          ) 
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) 
+          RETURNING *
+        `)
+        .get(
+          projectId,
+          data.title,
+          data.body,
+          data.original_text || null,
+          data.clean_text || null,
+          data.source_url || null,
+          data.author || null,
+          data.anonymization_profile_id || null,
+          data.clean_version || 0
+        ) as any;
+    }
     
     return {
       ...result,
@@ -77,17 +104,31 @@ export class DocumentRepo {
     };
   }
 
-  list(projectId: number, options: { limit?: number; offset?: number } = {}): Document[] {
+  async list(projectId: number, options: { limit?: number; offset?: number } = {}): Promise<Document[]> {
     const { limit = 50, offset = 0 } = options;
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
     
-    const rows = this.getDbConnection()
-      .prepare(`
+    let rows: any[];
+    if (dbType === 'postgres') {
+      const result = await adapter.query(`
         SELECT * FROM documents 
-        WHERE project_id = ? 
+        WHERE project_id = $1 
         ORDER BY created_at DESC 
-        LIMIT ? OFFSET ?
-      `)
-      .all(projectId, limit, offset) as any[];
+        LIMIT $2 OFFSET $3
+      `, [projectId, limit, offset]);
+      rows = result.rows;
+    } else {
+      const db = this.getDbConnection();
+      rows = db
+        .prepare(`
+          SELECT * FROM documents 
+          WHERE project_id = ? 
+          ORDER BY created_at DESC 
+          LIMIT ? OFFSET ?
+        `)
+        .all(projectId, limit, offset) as any[];
+    }
     
     return rows.map(row => ({
       ...row,
@@ -206,30 +247,61 @@ export class DocumentRepo {
   }
 
   // Delete with workspace validation
-  deleteWithWorkspaceValidation(id: number, workspaceId: number): boolean {
-    const result = this.getDbConnection()
-      .prepare(`
-        DELETE FROM documents 
-        WHERE id = ? 
-        AND project_id IN (
-          SELECT id FROM projects WHERE workspace_id = ?
-        )
-      `)
-      .run(id, workspaceId);
+  async deleteWithWorkspaceValidation(id: number, workspaceId: number): Promise<boolean> {
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
     
-    return result.changes > 0;
+    if (dbType === 'postgres') {
+      const result = await adapter.query(`
+        DELETE FROM documents 
+        WHERE id = $1 
+        AND project_id IN (
+          SELECT id FROM projects WHERE workspace_id = $2
+        )
+      `, [id, workspaceId]);
+      
+      return result.rowCount > 0;
+    } else {
+      const db = this.getDbConnection();
+      const result = db
+        .prepare(`
+          DELETE FROM documents 
+          WHERE id = ? 
+          AND project_id IN (
+            SELECT id FROM projects WHERE workspace_id = ?
+          )
+        `)
+        .run(id, workspaceId);
+      
+      return result.changes > 0;
+    }
   }
 
   // Get document by ID with workspace validation
-  getById(id: number, workspaceId: number): Document | null {
-    const row = this.getDbConnection()
-      .prepare(`
+  async getById(id: number, workspaceId: number): Promise<Document | null> {
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
+    
+    let row: any;
+    if (dbType === 'postgres') {
+      const result = await adapter.query(`
         SELECT d.* 
         FROM documents d
         JOIN projects p ON d.project_id = p.id
-        WHERE d.id = ? AND p.workspace_id = ?
-      `)
-      .get(id, workspaceId) as any;
+        WHERE d.id = $1 AND p.workspace_id = $2
+      `, [id, workspaceId]);
+      row = result.rows[0];
+    } else {
+      const db = this.getDbConnection();
+      row = db
+        .prepare(`
+          SELECT d.* 
+          FROM documents d
+          JOIN projects p ON d.project_id = p.id
+          WHERE d.id = ? AND p.workspace_id = ?
+        `)
+        .get(id, workspaceId) as any;
+    }
     
     if (!row) return null;
     

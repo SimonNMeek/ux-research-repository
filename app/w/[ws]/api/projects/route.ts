@@ -58,7 +58,7 @@ const handler: WorkspaceRouteHandler = async (context, req) => {
       const projectRepo = new ProjectRepo();
       
       // Check if project with this slug already exists
-      const existing = projectRepo.getBySlug(workspace.id, slug);
+      const existing = await projectRepo.getBySlug(workspace.id, slug);
       if (existing) {
         return new Response(
           JSON.stringify({ error: 'Project with this slug already exists' }),
@@ -66,7 +66,7 @@ const handler: WorkspaceRouteHandler = async (context, req) => {
         );
       }
 
-      const project = projectRepo.create(workspace.id, {
+      const project = await projectRepo.create(workspace.id, {
         slug,
         name,
         description: description || ''

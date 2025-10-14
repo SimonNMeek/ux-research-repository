@@ -139,17 +139,33 @@ export async function trackMcpUsage(
 }
 
 /**
+ * Add CORS headers to response
+ */
+function addCorsHeaders(response: NextResponse): NextResponse {
+  response.headers.set('Access-Control-Allow-Origin', '*');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  response.headers.set('Access-Control-Max-Age', '86400');
+  return response;
+}
+
+/**
  * Higher-order function to wrap MCP endpoints with authentication
  */
 export function withMcpAuth(
   handler: (context: McpContext, request: NextRequest) => Promise<Response>
 ) {
   return async (request: NextRequest) => {
+    // Handle preflight OPTIONS requests
+    if (request.method === 'OPTIONS') {
+      return addCorsHeaders(new NextResponse(null, { status: 200 }));
+    }
+
     try {
       const authResult = await authenticateMcpRequest(request);
 
       if (authResult instanceof NextResponse) {
-        return authResult; // Return error response
+        return addCorsHeaders(authResult); // Return error response with CORS
       }
 
       const { user } = authResult;
@@ -162,23 +178,26 @@ export function withMcpAuth(
       if (workspaceSlug) {
         const resolved = await resolveWorkspace(user, workspaceSlug);
         if (!resolved) {
-          return NextResponse.json(
+          const errorResponse = NextResponse.json(
             { error: `Workspace '${workspaceSlug}' not found or access denied` },
             { status: 404 }
           );
+          return addCorsHeaders(errorResponse);
         }
         workspace = resolved;
       }
 
       const context: McpContext = { user, workspace };
 
-      return await handler(context, request);
+      const response = await handler(context, request);
+      return addCorsHeaders(response);
     } catch (error: any) {
       console.error('MCP API error:', error);
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'Internal server error', message: error.message },
         { status: 500 }
       );
+      return addCorsHeaders(errorResponse);
     }
   };
 }

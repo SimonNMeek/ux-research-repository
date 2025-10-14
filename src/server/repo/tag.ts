@@ -13,20 +13,33 @@ export class TagRepo {
     return getDb();
   }
 
-  upsert(workspaceId: number, name: string): Tag {
+  async upsert(workspaceId: number, name: string): Promise<Tag> {
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
+    
     // Try to get existing tag first
-    const existing = this.getDbConnection()
-      .prepare('SELECT * FROM workspace_tags WHERE workspace_id = ? AND name = ?')
-      .get(workspaceId, name) as any;
+    let existing: any;
+    if (dbType === 'postgres') {
+      const result = await adapter.query('SELECT * FROM workspace_tags WHERE workspace_id = $1 AND name = $2', [workspaceId, name]);
+      existing = result.rows[0];
+    } else {
+      const db = this.getDbConnection();
+      existing = db.prepare('SELECT * FROM workspace_tags WHERE workspace_id = ? AND name = ?').get(workspaceId, name) as any;
+    }
     
     if (existing) {
       return existing;
     }
     
     // Create new tag
-    const result = this.getDbConnection()
-      .prepare('INSERT INTO workspace_tags (workspace_id, name) VALUES (?, ?) RETURNING *')
-      .get(workspaceId, name) as any;
+    let result: any;
+    if (dbType === 'postgres') {
+      const queryResult = await adapter.query('INSERT INTO workspace_tags (workspace_id, name) VALUES ($1, $2) RETURNING *', [workspaceId, name]);
+      result = queryResult.rows[0];
+    } else {
+      const db = this.getDbConnection();
+      result = db.prepare('INSERT INTO workspace_tags (workspace_id, name) VALUES (?, ?) RETURNING *').get(workspaceId, name) as any;
+    }
     
     return result;
   }
@@ -47,31 +60,51 @@ export class TagRepo {
     return row || null;
   }
 
-  getByName(workspaceId: number, name: string): Tag | null {
-    const row = this.getDbConnection()
-      .prepare('SELECT * FROM workspace_tags WHERE workspace_id = ? AND name = ?')
-      .get(workspaceId, name) as any;
+  async getByName(workspaceId: number, name: string): Promise<Tag | null> {
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
+    
+    let row: any;
+    if (dbType === 'postgres') {
+      const result = await adapter.query('SELECT * FROM workspace_tags WHERE workspace_id = $1 AND name = $2', [workspaceId, name]);
+      row = result.rows[0];
+    } else {
+      const db = this.getDbConnection();
+      row = db.prepare('SELECT * FROM workspace_tags WHERE workspace_id = ? AND name = ?').get(workspaceId, name) as any;
+    }
     
     return row || null;
   }
 
   // Attach tags to a document
-  attach(documentId: number, tagIds: number[]): void {
+  async attach(documentId: number, tagIds: number[]): Promise<void> {
     if (tagIds.length === 0) return;
     
-    // Remove existing tags first
-    this.getDbConnection()
-      .prepare('DELETE FROM document_tags WHERE document_id = ?')
-      .run(documentId);
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
     
-    // Insert new tags
-    const insertStmt = this.getDbConnection().prepare('INSERT INTO document_tags (document_id, tag_id) VALUES (?, ?)');
-    
-    this.getDbConnection().transaction(() => {
+    if (dbType === 'postgres') {
+      // Remove existing tags first
+      await adapter.query('DELETE FROM document_tags WHERE document_id = $1', [documentId]);
+      
+      // Insert new tags
       for (const tagId of tagIds) {
-        insertStmt.run(documentId, tagId);
+        await adapter.query('INSERT INTO document_tags (document_id, tag_id) VALUES ($1, $2)', [documentId, tagId]);
       }
-    })();
+    } else {
+      // Remove existing tags first
+      const db = this.getDbConnection();
+      db.prepare('DELETE FROM document_tags WHERE document_id = ?').run(documentId);
+      
+      // Insert new tags
+      const insertStmt = db.prepare('INSERT INTO document_tags (document_id, tag_id) VALUES (?, ?)');
+      
+      db.transaction(() => {
+        for (const tagId of tagIds) {
+          insertStmt.run(documentId, tagId);
+        }
+      })();
+    }
   }
 
   // Add tags to a document (without removing existing ones)
@@ -100,16 +133,32 @@ export class TagRepo {
   }
 
   // Get tags for a document
-  getForDocument(documentId: number): Tag[] {
-    const rows = this.getDbConnection()
-      .prepare(`
+  async getForDocument(documentId: number): Promise<Tag[]> {
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
+    
+    let rows: any[];
+    if (dbType === 'postgres') {
+      const result = await adapter.query(`
         SELECT wt.* 
         FROM workspace_tags wt
         JOIN document_tags dt ON wt.id = dt.tag_id
-        WHERE dt.document_id = ?
+        WHERE dt.document_id = $1
         ORDER BY wt.name
-      `)
-      .all(documentId) as any[];
+      `, [documentId]);
+      rows = result.rows;
+    } else {
+      const db = this.getDbConnection();
+      rows = db
+        .prepare(`
+          SELECT wt.* 
+          FROM workspace_tags wt
+          JOIN document_tags dt ON wt.id = dt.tag_id
+          WHERE dt.document_id = ?
+          ORDER BY wt.name
+        `)
+        .all(documentId) as any[];
+    }
     
     return rows;
   }
@@ -131,17 +180,19 @@ export class TagRepo {
   }
 
   // Upsert multiple tags and return their IDs
-  upsertMany(workspaceId: number, names: string[]): number[] {
+  async upsertMany(workspaceId: number, names: string[]): Promise<number[]> {
     if (names.length === 0) return [];
     
     const tagIds: number[] = [];
+    const adapter = getDbAdapter();
     
-    this.getDbConnection().transaction(() => {
+    // Use the adapter's transaction method
+    await adapter.transaction(async (txAdapter) => {
       for (const name of names) {
-        const tag = this.upsert(workspaceId, name);
+        const tag = await this.upsert(workspaceId, name);
         tagIds.push(tag.id);
       }
-    })();
+    });
     
     return tagIds;
   }
@@ -188,25 +239,37 @@ export class TagRepo {
   }
 
   // Attach a tag to a document by name (workspace-aware)
-  attachToDocument(workspaceId: number, documentId: number, tagName: string): void {
+  async attachToDocument(workspaceId: number, documentId: number, tagName: string): Promise<void> {
     // First, ensure the tag exists in the workspace
-    const tag = this.upsert(workspaceId, tagName);
+    const tag = await this.upsert(workspaceId, tagName);
     
     // Then attach it to the document
-    this.getDbConnection()
-      .prepare('INSERT OR IGNORE INTO document_tags (document_id, tag_id) VALUES (?, ?)')
-      .run(documentId, tag.id);
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
+    
+    if (dbType === 'postgres') {
+      await adapter.query('INSERT INTO document_tags (document_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [documentId, tag.id]);
+    } else {
+      const db = this.getDbConnection();
+      db.prepare('INSERT OR IGNORE INTO document_tags (document_id, tag_id) VALUES (?, ?)').run(documentId, tag.id);
+    }
   }
 
   // Remove a tag from a document by name (workspace-aware)
-  removeFromDocument(workspaceId: number, documentId: number, tagName: string): void {
+  async removeFromDocument(workspaceId: number, documentId: number, tagName: string): Promise<void> {
     // Find the tag in the workspace
-    const tag = this.getByName(workspaceId, tagName);
+    const tag = await this.getByName(workspaceId, tagName);
     if (!tag) return; // Tag doesn't exist, nothing to remove
     
     // Remove the association
-    this.getDbConnection()
-      .prepare('DELETE FROM document_tags WHERE document_id = ? AND tag_id = ?')
-      .run(documentId, tag.id);
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
+    
+    if (dbType === 'postgres') {
+      await adapter.query('DELETE FROM document_tags WHERE document_id = $1 AND tag_id = $2', [documentId, tag.id]);
+    } else {
+      const db = this.getDbConnection();
+      db.prepare('DELETE FROM document_tags WHERE document_id = ? AND tag_id = ?').run(documentId, tag.id);
+    }
   }
 }

@@ -1,0 +1,22 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package-mcp.json package.json
+COPY mcp-server-standalone.js .
+
+# Install dependencies
+RUN npm install
+
+# Make the script executable
+RUN chmod +x mcp-server-standalone.js
+
+# Set environment variable
+ENV SOL_RESEARCH_API_KEY=""
+
+# Expose port (if needed for health checks)
+EXPOSE 3000
+
+# Start the MCP server
+CMD ["node", "mcp-server-standalone.js"]

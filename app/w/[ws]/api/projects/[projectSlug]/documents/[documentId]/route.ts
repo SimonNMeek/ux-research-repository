@@ -46,7 +46,7 @@ const handler: WorkspaceRouteHandler = async (context, req, routeParams) => {
     }
 
     try {
-      const success = documentRepo.deleteWithWorkspaceValidation(parseInt(documentId), workspace.id);
+      const success = await documentRepo.deleteWithWorkspaceValidation(parseInt(documentId), workspace.id);
       
       if (!success) {
         return new Response(

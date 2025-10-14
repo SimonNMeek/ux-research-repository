@@ -1,0 +1,20 @@
+{
+	"mcpServers": {
+		"ux-repo": {
+			"command": "curl",
+			"args": [
+				"-X", "POST",
+				"https://ux-repo-web.vercel.app/api/mcp",
+				"-H", "Authorization: Bearer sk-qb85RiisZTwwgMjNM14eyFM7wHQN0CbGLFjlLOvwAjrTQ4sq",
+				"-H", "Content-Type: application/json",
+				"-d", "@-"
+			],
+			"env": {}
+		}
+	},
+	"scale": 0,
+	"locale": "en-US",
+	"userThemeMode": "system",
+	"dxt:allowlistEnabled": false,
+	"dxt:allowlistLastUpdated": "2025-10-13T16:17:59.572Z"
+}

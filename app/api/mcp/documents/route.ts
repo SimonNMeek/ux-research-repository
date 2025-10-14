@@ -58,7 +58,7 @@ const handler = async (context: McpContext, request: NextRequest) => {
         let documents: any[];
         if (dbType === 'postgres') {
           const result = await adapter.query(`
-            SELECT d.id, d.title, d.content_preview, d.created_at,
+            SELECT d.id, d.title, d.body, d.is_favorite, d.created_at,
                    p.slug as project_slug, p.name as project_name
             FROM documents d
             INNER JOIN projects p ON d.project_id = p.id
@@ -71,7 +71,7 @@ const handler = async (context: McpContext, request: NextRequest) => {
         } else {
           const db = getDb();
           documents = db.prepare(`
-            SELECT d.id, d.title, d.content_preview, d.created_at,
+            SELECT d.id, d.title, d.body, d.is_favorite, d.created_at,
                    p.slug as project_slug, p.name as project_name
             FROM documents d
             INNER JOIN projects p ON d.project_id = p.id
@@ -82,7 +82,40 @@ const handler = async (context: McpContext, request: NextRequest) => {
           `).all(projectSlug ? [workspace.id, projectSlug, limit] : [workspace.id, limit]);
         }
 
-        return NextResponse.json({ documents, count: documents.length });
+        // Get project info for response
+        let project: any;
+        if (dbType === 'postgres') {
+          const projectResult = await adapter.query(`
+            SELECT id, slug, name, description, created_at
+            FROM projects
+            WHERE workspace_id = $1 AND slug = $2
+          `, [workspace.id, projectSlug]);
+          project = projectResult.rows[0];
+        } else {
+          const db = getDb();
+          project = db.prepare(`
+            SELECT id, slug, name, description, created_at
+            FROM projects
+            WHERE workspace_id = ? AND slug = ?
+          `).get(workspace.id, projectSlug);
+        }
+
+        return NextResponse.json({ 
+          documents: documents.map(doc => ({
+            id: doc.id,
+            title: doc.title,
+            body: doc.body,
+            is_favorite: Boolean(doc.is_favorite),
+            created_at: doc.created_at
+          })),
+          project: project ? {
+            id: project.id,
+            slug: project.slug,
+            name: project.name,
+            description: project.description,
+            created_at: project.created_at
+          } : null
+        });
       }
     } catch (error: any) {
       console.error('Error fetching documents:', error);
