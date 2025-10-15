@@ -315,43 +315,48 @@ export class DocumentRepo {
   toggleFavorite(id: number, workspaceId: number): { is_favorite: boolean } {
     const db = this.getDbConnection();
     
-    // Use a transaction to handle the FTS trigger issue
-    const result = db.transaction(() => {
-      // First, check if document exists and get current status
-      const current = db.prepare(`
-        SELECT d.is_favorite 
-        FROM documents d
-        WHERE d.id = ? 
-        AND d.project_id IN (
-          SELECT p.id FROM projects p WHERE p.workspace_id = ?
-        )
-      `).get(id, workspaceId) as any;
-      
-      if (!current) {
-        throw new Error('Document not found or access denied');
-      }
-      
-      // Toggle the favourite status
-      const newStatus = !current.is_favorite;
-      
-      // Update the document
-      const updateResult = db.prepare(`
-        UPDATE documents 
-        SET is_favorite = ? 
-        WHERE id = ? 
-        AND project_id IN (
-          SELECT p.id FROM projects p WHERE p.workspace_id = ?
-        )
-      `).run(newStatus ? 1 : 0, id, workspaceId);
-      
-      if (updateResult.changes === 0) {
-        throw new Error('Document not found or access denied');
-      }
-      
-      return { is_favorite: newStatus };
-    })();
+    // First, check if document exists and get current status
+    const current = db.prepare(`
+      SELECT d.is_favorite 
+      FROM documents d
+      WHERE d.id = ? 
+      AND d.project_id IN (
+        SELECT p.id FROM projects p WHERE p.workspace_id = ?
+      )
+    `).get(id, workspaceId) as any;
     
-    return result;
+    if (!current) {
+      throw new Error('Document not found or access denied');
+    }
+    
+    // Toggle the favourite status
+    const newStatus = !current.is_favorite;
+    
+    // Use a direct SQL approach to avoid FTS trigger issues
+    const updateResult = db.exec(`
+      UPDATE documents 
+      SET is_favorite = ${newStatus ? 1 : 0} 
+      WHERE id = ${id} 
+      AND project_id IN (
+        SELECT p.id FROM projects p WHERE p.workspace_id = ${workspaceId}
+      )
+    `);
+    
+    // Check if the update was successful by querying the document again
+    const updated = db.prepare(`
+      SELECT d.is_favorite 
+      FROM documents d
+      WHERE d.id = ? 
+      AND d.project_id IN (
+        SELECT p.id FROM projects p WHERE p.workspace_id = ?
+      )
+    `).get(id, workspaceId) as any;
+    
+    if (!updated || updated.is_favorite !== newStatus) {
+      throw new Error('Document not found or access denied');
+    }
+    
+    return { is_favorite: newStatus };
   }
 
   // Get favorite documents
