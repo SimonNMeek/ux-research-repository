@@ -23,7 +23,7 @@ export default function HomePage() {
           /* Login CTA */
           <div className="text-center">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-              Ready to organise your research? - FINAL FIX v2.3
+              Ready to organise your research? - GIT CONNECTED v2.4
             </h2>
             <p className="text-lg text-gray-600 dark:text-gray-300 mb-8">
               Sign in to access your workspaces or create a new account to get started
