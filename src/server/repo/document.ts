@@ -24,7 +24,7 @@ export interface DocumentSearchResult extends Document {
 
 export class DocumentRepo {
   private getDbConnection() {
-    return getDb();
+    return getDbAdapter();
   }
 
   async create(projectId: number, data: {
@@ -312,18 +312,34 @@ export class DocumentRepo {
   }
 
   // Toggle favourite status with workspace validation
-  toggleFavorite(id: number, workspaceId: number): { is_favorite: boolean } {
-    const db = this.getDbConnection();
+  async toggleFavorite(id: number, workspaceId: number): Promise<{ is_favorite: boolean }> {
+    const adapter = this.getDbConnection();
+    const dbType = getDbType();
     
     // First, check if document exists and get current status
-    const current = db.prepare(`
-      SELECT d.is_favorite 
-      FROM documents d
-      WHERE d.id = ? 
-      AND d.project_id IN (
-        SELECT p.id FROM projects p WHERE p.workspace_id = ?
-      )
-    `).get(id, workspaceId) as any;
+    let current;
+    if (dbType === 'postgres') {
+      const result = await adapter.query(
+        `SELECT d.is_favorite 
+         FROM documents d
+         WHERE d.id = $1 
+         AND d.project_id IN (
+           SELECT p.id FROM projects p WHERE p.workspace_id = $2
+         )`,
+        [id, workspaceId]
+      );
+      current = result.rows[0];
+    } else {
+      const stmt = adapter.prepare(`
+        SELECT d.is_favorite 
+        FROM documents d
+        WHERE d.id = ? 
+        AND d.project_id IN (
+          SELECT p.id FROM projects p WHERE p.workspace_id = ?
+        )
+      `);
+      current = stmt.get([id, workspaceId]);
+    }
     
     if (!current) {
       throw new Error('Document not found or access denied');
@@ -332,27 +348,34 @@ export class DocumentRepo {
     // Toggle the favourite status
     const newStatus = !current.is_favorite;
     
-    // Use a simple prepared statement approach
-    const updateResult = db.prepare(`
-      UPDATE documents 
-      SET is_favorite = ? 
-      WHERE id = ? 
-      AND project_id IN (
-        SELECT p.id FROM projects p WHERE p.workspace_id = ?
-      )
-    `).run(newStatus ? 1 : 0, id, workspaceId);
+    // Update the document
+    let updateResult;
+    if (dbType === 'postgres') {
+      updateResult = await adapter.query(
+        `UPDATE documents 
+         SET is_favorite = $1 
+         WHERE id = $2 
+         AND project_id IN (
+           SELECT p.id FROM projects p WHERE p.workspace_id = $3
+         )`,
+        [newStatus ? 1 : 0, id, workspaceId]
+      );
+    } else {
+      const stmt = adapter.prepare(`
+        UPDATE documents 
+        SET is_favorite = ? 
+        WHERE id = ? 
+        AND project_id IN (
+          SELECT p.id FROM projects p WHERE p.workspace_id = ?
+        )
+      `);
+      updateResult = stmt.run([newStatus ? 1 : 0, id, workspaceId]);
+    }
     
-    // Check if the update was successful by querying the document again
-    const updated = db.prepare(`
-      SELECT d.is_favorite 
-      FROM documents d
-      WHERE d.id = ? 
-      AND d.project_id IN (
-        SELECT p.id FROM projects p WHERE p.workspace_id = ?
-      )
-    `).get(id, workspaceId) as any;
-    
-    if (!updated || updated.is_favorite !== newStatus) {
+    // Check if the update was successful
+    if (dbType === 'postgres' && updateResult.rowCount === 0) {
+      throw new Error('Document not found or access denied');
+    } else if (dbType === 'sqlite' && updateResult.changes === 0) {
       throw new Error('Document not found or access denied');
     }
     

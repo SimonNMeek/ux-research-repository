@@ -26,10 +26,11 @@ export function getDb() {
   const mockDb = {
     prepare: (sql: string) => {
       return {
-        get: (params: any[] = []) => {
+        get: async (params: any[] = []) => {
           if (dbType === 'postgres') {
             const convertedSql = convertSql(sql, params);
-            return adapter.query(convertedSql, params).then(result => result.rows[0]);
+            const result = await adapter.query(convertedSql, params);
+            return result.rows[0];
           } else {
             const stmt = adapter.prepare(sql);
             return stmt.get(params);
