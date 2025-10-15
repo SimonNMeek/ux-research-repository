@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET() {
   const documentation = {
-    title: "Sol Research API Documentation v1.4 - DEMO READY",
+    title: "Sol Research API Documentation v1.5 - LATEST DEPLOY",
     version: "1.0.0",
     description: "REST API for integrating with Sol Research using API keys",
     baseUrl: "https://ux-repo-web.vercel.app/api",
