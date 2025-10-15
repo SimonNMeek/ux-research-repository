@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -198,6 +199,7 @@ export default function OrganizationsPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-gray-900">
+        <Header />
         <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="flex items-center justify-center h-64">
             <div className="text-lg text-gray-600 dark:text-gray-400">Loading organizations...</div>
@@ -209,6 +211,7 @@ export default function OrganizationsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-900">
+      <Header />
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
