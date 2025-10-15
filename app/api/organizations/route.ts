@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbAdapter, getDbType } from '@/db/adapter';
-import { getDb } from '@/db/index';
 import { getSessionCookie, validateSession } from '@/lib/auth';
 import { OrganizationRepo } from '@/src/server/repo/organization';
 
@@ -29,8 +28,8 @@ export async function GET() {
         const result = await adapter.query('SELECT * FROM organizations ORDER BY name');
         organizations = result.rows;
       } else {
-        const db = getDb();
-        organizations = db.prepare('SELECT * FROM organizations ORDER BY name').all();
+        const stmt = adapter.prepare('SELECT * FROM organizations ORDER BY name');
+        organizations = stmt.all();
       }
       
       return NextResponse.json({ organizations });
@@ -228,8 +227,8 @@ export async function DELETE(request: NextRequest) {
       const result = await adapter.query('SELECT COUNT(*) as count FROM workspaces WHERE organization_id = $1', [parseInt(id)]);
       workspaceCount = result.rows[0];
     } else {
-      const db = getDb();
-      workspaceCount = db.prepare('SELECT COUNT(*) as count FROM workspaces WHERE organization_id = ?').get(parseInt(id));
+      const stmt = adapter.prepare('SELECT COUNT(*) as count FROM workspaces WHERE organization_id = ?');
+      workspaceCount = stmt.get([parseInt(id)]);
     }
 
     if (workspaceCount.count > 0) {

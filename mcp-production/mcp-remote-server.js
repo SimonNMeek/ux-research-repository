@@ -395,11 +395,15 @@ app.get('/.well-known/mcp', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.json({
     mcp_version: '2025-06-18',
-    transport: 'streamable-http',
+    transport: 'http',
     endpoints: { http: '/', info: '/mcp' },
     server: { name: 'sol-research-remote-mcp', title: 'Sol Research MCP', version: '1.0.0' },
-    capabilities: { tools: { list: true, call: true }, resources: { list: true, read: true }, prompts: { list: true, get: true }, logging: { levels: ['info','warn','error'] } },
-    auth: { required: false }
+    capabilities: { 
+      tools: { list: true, call: true }, 
+      resources: { list: true, read: true }, 
+      prompts: { list: true, get: true }
+    }
+    // Note: auth field omitted when not required
   });
 });
 
