@@ -332,15 +332,15 @@ export class DocumentRepo {
     // Toggle the favourite status
     const newStatus = !current.is_favorite;
     
-    // Use a direct SQL approach to avoid FTS trigger issues
-    const updateResult = db.exec(`
+    // Use a simple prepared statement approach
+    const updateResult = db.prepare(`
       UPDATE documents 
-      SET is_favorite = ${newStatus ? 1 : 0} 
-      WHERE id = ${id} 
+      SET is_favorite = ? 
+      WHERE id = ? 
       AND project_id IN (
-        SELECT p.id FROM projects p WHERE p.workspace_id = ${workspaceId}
+        SELECT p.id FROM projects p WHERE p.workspace_id = ?
       )
-    `);
+    `).run(newStatus ? 1 : 0, id, workspaceId);
     
     // Check if the update was successful by querying the document again
     const updated = db.prepare(`
