@@ -4,7 +4,18 @@ import { hashPassword } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
-    const { firstName, lastName, email, password } = await request.json();
+    const { 
+      firstName, 
+      lastName, 
+      email, 
+      password,
+      organizationName,
+      organizationType,
+      joinExisting,
+      inviteCode
+    } = await request.json();
+
+    console.log('Signup request:', { firstName, lastName, email, organizationName, organizationType, joinExisting });
 
     // Validation
     if (!firstName || !lastName || !email || !password) {
@@ -73,10 +84,28 @@ export async function POST(request: NextRequest) {
       userId = result.lastInsertRowid;
     }
 
-    // Create a default organization for new users
+    // Create organization for new users
     // This gives them their own isolated tenant space
-    const orgSlug = `${email.split('@')[0]}-${userId}`.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-    const orgName = `${firstName}'s Organization`;
+    let orgSlug, orgName;
+    
+    if (joinExisting && inviteCode) {
+      // Handle joining existing organization (TODO: implement invite code validation)
+      return NextResponse.json(
+        { error: 'Joining existing organizations is not yet implemented' },
+        { status: 501 }
+      );
+    } else {
+      // Create new organization with user-provided name
+      orgName = organizationName || `${firstName}'s Organization`;
+      orgSlug = orgName.toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+      
+      // Ensure slug is unique by appending user ID if needed
+      orgSlug = `${orgSlug}-${userId}`;
+    }
     
     let organizationId;
     if (dbType === 'postgres') {
@@ -145,6 +174,10 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error('Signup error:', error);
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
     return NextResponse.json(
       { error: 'An error occurred during signup. Please try again.' },
       { status: 500 }

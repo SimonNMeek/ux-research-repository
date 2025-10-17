@@ -59,8 +59,8 @@ function runMigrations(db: Database.Database) {
 export function getDb(): Database.Database {
   // If DATABASE_URL is set, use the compatibility layer
   if (process.env.DATABASE_URL) {
-    const { getDb: getCompatDb } = require('./compat');
-    return getCompatDb();
+    const { getDb } = require('./compat');
+    return getDb();
   }
 
   if (database) return database;

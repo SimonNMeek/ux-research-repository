@@ -7,7 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, UserPlus, Check } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Loader2, UserPlus, Check, ArrowLeft, ArrowRight, Building2, Users } from 'lucide-react';
 
 export default function SignupForm() {
   const router = useRouter();
@@ -17,12 +19,17 @@ export default function SignupForm() {
     email: '',
     password: '',
     confirmPassword: '',
+    organizationName: '',
+    organizationType: 'personal', // 'personal' or 'company'
+    joinExisting: false,
+    inviteCode: '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [step, setStep] = useState(1); // 1: Basic info, 2: Organization setup
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
@@ -30,26 +37,48 @@ export default function SignupForm() {
     setError(''); // Clear error when user types
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.checked,
+    });
+    setError(''); // Clear error when user types
+  };
 
-    // Client-side validation
-    if (!formData.firstName || !formData.lastName || !formData.email || !formData.password) {
+  const handleNextStep = () => {
+    // Validate step 1 fields
+    if (!formData.firstName || !formData.lastName || !formData.email || !formData.password || !formData.confirmPassword) {
       setError('Please fill in all fields');
-      setLoading(false);
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
-      setLoading(false);
       return;
     }
 
     if (formData.password.length < 8) {
       setError('Password must be at least 8 characters long');
+      return;
+    }
+
+    setStep(2);
+    setError('');
+  };
+
+  const handlePrevStep = () => {
+    setStep(1);
+    setError('');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    // Validate organization fields if creating new org
+    if (!formData.joinExisting && !formData.organizationName) {
+      setError('Please enter an organization name or choose to join an existing organization');
       setLoading(false);
       return;
     }
@@ -63,6 +92,10 @@ export default function SignupForm() {
           lastName: formData.lastName,
           email: formData.email,
           password: formData.password,
+          organizationName: formData.organizationName,
+          organizationType: formData.organizationType,
+          joinExisting: formData.joinExisting,
+          inviteCode: formData.inviteCode,
         }),
       });
 
@@ -105,16 +138,16 @@ export default function SignupForm() {
     );
   }
 
-  return (
+  const renderStep1 = () => (
     <Card className="w-full max-w-md mx-auto">
       <CardHeader>
         <CardTitle className="text-2xl">Create Account</CardTitle>
         <CardDescription>
-          Join Sol Repo to start contributing research insights
+          Step 1: Your personal information
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-4">
           {error && (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
@@ -193,21 +226,13 @@ export default function SignupForm() {
           </div>
 
           <Button
-            type="submit"
+            type="button"
+            onClick={handleNextStep}
             className="w-full"
             disabled={loading}
           >
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating Account...
-              </>
-            ) : (
-              <>
-                <UserPlus className="mr-2 h-4 w-4" />
-                Create Account
-              </>
-            )}
+            Next: Organization Setup
+            <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
 
           <p className="text-sm text-center text-gray-600 dark:text-gray-400">
@@ -219,6 +244,138 @@ export default function SignupForm() {
               Sign in
             </a>
           </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  const renderStep2 = () => (
+    <Card className="w-full max-w-md mx-auto">
+      <CardHeader>
+        <CardTitle className="text-2xl">Organization Setup</CardTitle>
+        <CardDescription>
+          Step 2: Set up your organization or join an existing one
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="joinExisting"
+                name="joinExisting"
+                checked={formData.joinExisting}
+                onCheckedChange={(checked) => 
+                  setFormData({ ...formData, joinExisting: checked as boolean })
+                }
+                disabled={loading}
+              />
+              <Label htmlFor="joinExisting" className="text-sm font-medium">
+                I have an invite code to join an existing organization
+              </Label>
+            </div>
+
+            {formData.joinExisting ? (
+              <div className="space-y-2">
+                <Label htmlFor="inviteCode">Invite Code</Label>
+                <Input
+                  id="inviteCode"
+                  name="inviteCode"
+                  type="text"
+                  value={formData.inviteCode}
+                  onChange={handleChange}
+                  placeholder="Enter your invite code"
+                  disabled={loading}
+                  required={formData.joinExisting}
+                />
+                <p className="text-xs text-gray-500">
+                  Ask your organization admin for an invite code
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="organizationName">Organization Name</Label>
+                  <Input
+                    id="organizationName"
+                    name="organizationName"
+                    type="text"
+                    value={formData.organizationName}
+                    onChange={handleChange}
+                    placeholder="My Company or Personal Name"
+                    disabled={loading}
+                    required={!formData.joinExisting}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="organizationType">Organization Type</Label>
+                  <Select
+                    name="organizationType"
+                    value={formData.organizationType}
+                    onValueChange={(value) => 
+                      setFormData({ ...formData, organizationType: value })
+                    }
+                    disabled={loading}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select organization type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="personal">
+                        <div className="flex items-center">
+                          <Users className="mr-2 h-4 w-4" />
+                          Personal
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="company">
+                        <div className="flex items-center">
+                          <Building2 className="mr-2 h-4 w-4" />
+                          Company
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handlePrevStep}
+              className="flex-1"
+              disabled={loading}
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
+            <Button
+              type="submit"
+              className="flex-1"
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating Account...
+                </>
+              ) : (
+                <>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Create Account
+                </>
+              )}
+            </Button>
+          </div>
 
           <p className="text-xs text-center text-gray-500 dark:text-gray-500 mt-4">
             New accounts are created with <span className="font-semibold">Contributor</span> access,
@@ -228,5 +385,27 @@ export default function SignupForm() {
       </CardContent>
     </Card>
   );
+
+  if (success) {
+    return (
+      <Card className="w-full max-w-md mx-auto">
+        <CardContent className="pt-6">
+          <div className="text-center">
+            <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-full bg-green-100 dark:bg-green-900 mb-4">
+              <Check className="h-6 w-6 text-green-600 dark:text-green-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              Account Created!
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Your account and organization have been successfully created. Redirecting to sign in...
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return step === 1 ? renderStep1() : renderStep2();
 }
 
