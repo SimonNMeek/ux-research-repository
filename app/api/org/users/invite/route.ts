@@ -4,7 +4,7 @@ import { getSessionCookie, validateSession } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
-    const sessionId = getSessionCookie();
+    const sessionId = await getSessionCookie();
     if (!sessionId) {
       return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
     }

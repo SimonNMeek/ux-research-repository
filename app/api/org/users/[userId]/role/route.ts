@@ -7,7 +7,7 @@ export async function PUT(
   { params }: { params: { userId: string } }
 ) {
   try {
-    const sessionId = getSessionCookie();
+    const sessionId = await getSessionCookie();
     if (!sessionId) {
       return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
     }
