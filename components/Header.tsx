@@ -308,8 +308,21 @@ export default function Header() {
               Settings
             </button>
             
-            {/* Admin Section */}
-            {(user?.system_role === 'super_admin' || user?.system_role === 'admin') && (
+            {/* Organization Admin Section */}
+            <div className="border-t border-gray-100 dark:border-gray-700 my-1"></div>
+            <button 
+              onClick={() => {
+                setDropdownOpen(false);
+                router.push('/org/users');
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+            >
+              <User className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
+              Organization Users
+            </button>
+            
+            {/* Super Admin Section */}
+            {(user?.system_role === 'super_admin') && (
               <>
                 <div className="border-t border-gray-100 dark:border-gray-700 my-1"></div>
                 <button 
@@ -320,7 +333,7 @@ export default function Header() {
                   className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
                 >
                   <Shield className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
-                  User Management
+                  All Users
                 </button>
                 <button 
                   onClick={() => {
@@ -330,7 +343,7 @@ export default function Header() {
                   className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
                 >
                   <Building2 className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
-                  Organizations
+                  All Organizations
                 </button>
               </>
             )}

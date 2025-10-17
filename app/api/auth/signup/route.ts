@@ -15,7 +15,6 @@ export async function POST(request: NextRequest) {
       inviteCode
     } = await request.json();
 
-    console.log('Signup request:', { firstName, lastName, email, organizationName, organizationType, joinExisting });
 
     // Validation
     if (!firstName || !lastName || !email || !password) {
@@ -136,16 +135,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Create a default workspace within the organization
+    const workspaceSlug = `${orgSlug}-workspace`;
+    const workspaceName = `${orgName} Workspace`;
+    
     let workspaceId;
     if (dbType === 'postgres') {
       const workspaceResult = await adapter.query(
         `INSERT INTO workspaces (slug, name, organization_id, metadata) VALUES ($1, $2, $3, $4) RETURNING id`,
-        ['my-workspace', 'My Workspace', organizationId, JSON.stringify({ description: 'Your first workspace' })]
+        [workspaceSlug, workspaceName, organizationId, JSON.stringify({ description: 'Your first workspace' })]
       );
       workspaceId = workspaceResult.rows[0].id;
     } else {
       const workspaceStmt = adapter.prepare(`INSERT INTO workspaces (slug, name, organization_id, metadata) VALUES (?, ?, ?, ?)`);
-      const workspaceResult = workspaceStmt.run(['my-workspace', 'My Workspace', organizationId, JSON.stringify({ description: 'Your first workspace' })]);
+      const workspaceResult = workspaceStmt.run([workspaceSlug, workspaceName, organizationId, JSON.stringify({ description: 'Your first workspace' })]);
       workspaceId = workspaceResult.lastInsertRowid;
     }
 
@@ -174,10 +176,6 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error('Signup error:', error);
-    console.error('Error details:', {
-      message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    });
     return NextResponse.json(
       { error: 'An error occurred during signup. Please try again.' },
       { status: 500 }
