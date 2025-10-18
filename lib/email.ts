@@ -1,6 +1,17 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy initialization to avoid build errors when API key is missing
+let resend: Resend | null = null;
+
+function getResendInstance(): Resend {
+  if (!resend) {
+    if (!process.env.RESEND_API_KEY) {
+      throw new Error('RESEND_API_KEY is required');
+    }
+    resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resend;
+}
 
 export interface InvitationEmailData {
   to: string;
@@ -75,7 +86,8 @@ The Sol Research Team
 ---
 This is an automated message from Sol Research. Please do not reply directly to this email.`;
 
-      const result = await resend.emails.send({
+      const resendInstance = getResendInstance();
+      const result = await resendInstance.emails.send({
         from: fromAddress!,
         to: [data.to],
         subject: `You're invited to join ${data.organizationName} on Sol Research`,
