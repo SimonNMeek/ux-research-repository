@@ -87,16 +87,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
     }
 
-    // Check permissions
+    // Check permissions - allow system admins or organization owners/admins
     console.log('DEBUG: User for workspace creation:', { id: user.id, email: user.email, system_role: user.system_role });
-    console.log('DEBUG: canCreateWorkspace result:', canCreateWorkspace(user));
     
-    if (!canCreateWorkspace(user)) {
-      console.log('DEBUG: Permission check failed for user:', user);
-      return NextResponse.json(
-        { error: getPermissionErrorMessage(PERMISSIONS.CREATE_WORKSPACE) },
-        { status: 403 }
-      );
+    // System admins can always create workspaces
+    const canCreateBySystemRole = canCreateWorkspace(user);
+    
+    if (!canCreateBySystemRole) {
+      // Check if user is an organization owner/admin (permission will be verified later against the specific organization)
+      console.log('DEBUG: User is not a system admin, will check organization permissions later');
     }
 
     const { name, slug, description, organizationId } = await request.json();
@@ -111,7 +110,7 @@ export async function POST(request: NextRequest) {
     const adapter = getDbAdapter();
     const dbType = getDbType();
 
-    // Verify user has access to organization
+    // Verify user has access to organization and can create workspaces
     let orgAccess: { role: string } | undefined;
     if (dbType === 'postgres') {
       const result = await adapter.query(`SELECT role FROM user_organizations WHERE user_id = $1 AND organization_id = $2`, [user.id, organizationId]);
@@ -124,6 +123,18 @@ export async function POST(request: NextRequest) {
     if (!orgAccess && user.system_role !== 'super_admin') {
       return NextResponse.json(
         { error: 'You do not have access to this organization' },
+        { status: 403 }
+      );
+    }
+
+    // Check if user can create workspaces (system admin OR organization owner/admin)
+    const canCreateWorkspaceInOrg = user.system_role === 'super_admin' || 
+                                   orgAccess?.role === 'owner' || 
+                                   orgAccess?.role === 'admin';
+    
+    if (!canCreateWorkspaceInOrg) {
+      return NextResponse.json(
+        { error: 'Only organization owners and admins can create workspaces' },
         { status: 403 }
       );
     }
@@ -214,6 +225,47 @@ export async function POST(request: NextRequest) {
       db.prepare(
         `INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by) VALUES (?, ?, 'owner', ?)`
       ).run(user.id, workspaceId, user.id);
+    }
+
+    // AUTO-GRANT: Give all organization members access to the new workspace
+    // Get all organization members
+    let orgMembers: { user_id: number; role: string }[];
+    if (dbType === 'postgres') {
+      const membersResult = await adapter.query(
+        `SELECT user_id, role FROM user_organizations WHERE organization_id = $1 AND user_id != $2`,
+        [organizationId, user.id]
+      );
+      orgMembers = membersResult.rows;
+    } else {
+      const db = getDb();
+      orgMembers = db.prepare(
+        `SELECT user_id, role FROM user_organizations WHERE organization_id = ? AND user_id != ?`
+      ).all(organizationId, user.id);
+    }
+
+    // Grant workspace access to all organization members
+    // Owners get admin role, admins get admin role, members get member role
+    for (const member of orgMembers) {
+      let workspaceRole: string;
+      if (member.role === 'owner') {
+        workspaceRole = 'admin'; // Organization owners get admin role in workspace
+      } else if (member.role === 'admin') {
+        workspaceRole = 'admin'; // Organization admins get admin role in workspace
+      } else {
+        workspaceRole = 'member'; // Organization members get member role in workspace
+      }
+
+      if (dbType === 'postgres') {
+        await adapter.query(
+          `INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by) VALUES ($1, $2, $3, $4)`,
+          [member.user_id, workspaceId, workspaceRole, user.id]
+        );
+      } else {
+        const db = getDb();
+        db.prepare(
+          `INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by) VALUES (?, ?, ?, ?)`
+        ).run(member.user_id, workspaceId, workspaceRole, user.id);
+      }
     }
 
     let newWorkspace: any;

@@ -74,6 +74,12 @@ interface User {
   system_role?: string;
 }
 
+interface WorkspaceContext {
+  user: User;
+  organizationRole: 'owner' | 'admin' | 'member';
+  workspaceRole: 'owner' | 'admin' | 'member' | 'viewer';
+}
+
 export default function WorkspaceDashboard() {
   const params = useParams();
   const router = useRouter();
@@ -83,6 +89,7 @@ export default function WorkspaceDashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [favoriteDocuments, setFavoriteDocuments] = useState<FavoriteDocument[]>([]);
   const [user, setUser] = useState<User | null>(null);
+  const [workspaceContext, setWorkspaceContext] = useState<WorkspaceContext | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -141,6 +148,13 @@ export default function WorkspaceDashboard() {
         }
         const workspaceData = await workspaceRes.json();
         setWorkspace(workspaceData);
+
+        // Load workspace context (includes user roles)
+        const contextRes = await fetch(`/w/${workspaceSlug}/api/context`);
+        if (contextRes.ok) {
+          const contextData = await contextRes.json();
+          setWorkspaceContext(contextData.context);
+        }
 
         // Load projects
         const projectsRes = await fetch(`/w/${workspaceSlug}/api/projects`);
@@ -515,8 +529,8 @@ export default function WorkspaceDashboard() {
           </div>
         )}
 
-        {/* Quick Actions - Only show for admins */}
-        {(user?.system_role === 'super_admin' || user?.system_role === 'admin') && (
+        {/* Quick Actions - Only show for workspace owners/admins */}
+        {(workspaceContext?.workspaceRole === 'owner' || workspaceContext?.workspaceRole === 'admin') && (
           <div className="flex gap-4 mb-8">
             <Dialog open={createProjectOpen} onOpenChange={setCreateProjectOpen}>
               <DialogTrigger asChild>
@@ -585,11 +599,11 @@ export default function WorkspaceDashboard() {
                 <FolderOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No projects yet</h3>
                 <p className="text-gray-600 dark:text-gray-400 mb-4">
-                  {(user?.system_role === 'super_admin' || user?.system_role === 'admin') 
+                  {(workspaceContext?.workspaceRole === 'owner' || workspaceContext?.workspaceRole === 'admin') 
                     ? 'Create your first project to start organising your research documents.' 
                     : 'No projects have been created in this workspace yet. Contact an admin to create one.'}
                 </p>
-                {(user?.system_role === 'super_admin' || user?.system_role === 'admin') && (
+                {(workspaceContext?.workspaceRole === 'owner' || workspaceContext?.workspaceRole === 'admin') && (
                   <Button onClick={() => setCreateProjectOpen(true)} className="flex items-center gap-2">
                     <Plus className="w-4 h-4" />
                     Create Project
@@ -632,8 +646,8 @@ export default function WorkspaceDashboard() {
                       )}
                     </div>
 
-                    {/* Delete button for super-admins */}
-                    {user?.system_role === 'super_admin' && (
+                    {/* Delete button for workspace owners */}
+                    {workspaceContext?.workspaceRole === 'owner' && (
                       <Button
                         variant="ghost"
                         size="sm"

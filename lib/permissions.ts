@@ -69,6 +69,7 @@ export function hasPermission(user: User | null, permission: Permission): boolea
 
 /**
  * Check if a user can create workspaces
+ * This checks system roles, but organization-level permissions are checked separately in the API
  */
 export function canCreateWorkspace(user: User | null): boolean {
   return hasPermission(user, PERMISSIONS.CREATE_WORKSPACE);

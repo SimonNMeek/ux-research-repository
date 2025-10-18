@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useRouter, usePathname } from 'next/navigation';
 import { useDarkMode } from '@/hooks/useDarkMode';
 import CreateWorkspaceModal from '@/components/CreateWorkspaceModal';
+import { canCreateWorkspace } from '@/lib/permissions';
 
 interface AuthUser {
   id: number;
@@ -31,6 +32,7 @@ export default function Header() {
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [userOrgRole, setUserOrgRole] = useState<string | null>(null);
   
   const dropdownRef = useRef<HTMLDivElement>(null);
   const workspaceDropdownRef = useRef<HTMLDivElement>(null);
@@ -44,6 +46,17 @@ export default function Header() {
         if (userResponse.ok) {
           const userData = await userResponse.json();
           setUser(userData.user);
+          
+          // Load user's organization role
+          try {
+            const orgUsersResponse = await fetch('/api/org/users');
+            if (orgUsersResponse.ok) {
+              const orgUsersData = await orgUsersResponse.json();
+              setUserOrgRole(orgUsersData.currentUserRole);
+            }
+          } catch (err) {
+            console.warn('Failed to load user organization role:', err);
+          }
         }
       } catch (err) {
         console.error('Failed to load user:', err);
@@ -144,6 +157,19 @@ export default function Header() {
     }
   };
 
+  // Check if user can create workspaces (system admin OR organization owner/admin)
+  const canUserCreateWorkspace = () => {
+    if (!user) return false;
+    
+    // System admins can always create workspaces
+    if (canCreateWorkspace(user)) {
+      return true;
+    }
+    
+    // Organization owners and admins can create workspaces
+    return userOrgRole === 'owner' || userOrgRole === 'admin';
+  };
+
   return (
     <header className="h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 flex items-center justify-between">
       {/* Left side - Logo placeholder */}
@@ -206,8 +232,8 @@ export default function Header() {
               
               <div className="border-t border-gray-100 dark:border-gray-700 my-1"></div>
               
-              {/* Only show Create Workspace for admins */}
-              {(user?.system_role === 'super_admin' || user?.system_role === 'admin') && (
+              {/* Show Create Workspace only for users with appropriate permissions */}
+              {canUserCreateWorkspace() && (
                 <button
                   onClick={() => {
                     setWorkspaceDropdownOpen(false);
