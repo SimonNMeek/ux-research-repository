@@ -206,19 +206,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Grant user access to the workspace
+    // Grant user access to the workspace with appropriate role
+    const workspaceRole = invitation ? invitation.role : 'owner'; // Use invitation role if available, otherwise owner for new org creators
+    const workspaceGrantedBy = invitation ? invitation.invited_by : userId; // Use inviter as granter if invited, otherwise self
+    
     if (dbType === 'postgres') {
       await adapter.query(
         `INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by)
-         VALUES ($1, $2, 'owner', $3)`,
-        [userId, workspaceId, userId]
+         VALUES ($1, $2, $3, $4)`,
+        [userId, workspaceId, workspaceRole, workspaceGrantedBy]
       );
     } else {
       const stmt = adapter.prepare(
         `INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by)
-         VALUES (?, ?, 'owner', ?)`
+         VALUES (?, ?, ?, ?)`
       );
-      stmt.run([userId, workspaceId, userId]);
+      stmt.run([userId, workspaceId, workspaceRole, workspaceGrantedBy]);
     }
 
     // Mark invitation as accepted if this was an invitation signup
