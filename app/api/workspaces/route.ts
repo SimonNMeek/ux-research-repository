@@ -20,22 +20,24 @@ export async function GET() {
     const adapter = getDbAdapter();
     const dbType = getDbType();
     
-    // Super admins can see all workspaces
+    // Super admins can see all workspaces with organization info
     if (user.system_role === 'super_admin') {
       let workspaces: any[];
       if (dbType === 'postgres') {
         const result = await adapter.query(`
-          SELECT id, name, slug, created_at
-          FROM workspaces
-          ORDER BY name
+          SELECT w.id, w.name, w.slug, w.created_at, o.id as organization_id, o.name as organization_name, o.slug as organization_slug
+          FROM workspaces w
+          INNER JOIN organizations o ON w.organization_id = o.id
+          ORDER BY o.name, w.name
         `);
         workspaces = result.rows;
       } else {
         const db = getDb();
         workspaces = db.prepare(`
-          SELECT id, name, slug, created_at
-          FROM workspaces
-          ORDER BY name
+          SELECT w.id, w.name, w.slug, w.created_at, o.id as organization_id, o.name as organization_name, o.slug as organization_slug
+          FROM workspaces w
+          INNER JOIN organizations o ON w.organization_id = o.id
+          ORDER BY o.name, w.name
         `).all();
       }
 

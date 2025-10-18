@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileBox, Search, Users, FileText, Plus } from 'lucide-react';
+import { FileBox, Search, Users, FileText, Plus, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Header from '@/components/Header';
 import CreateWorkspaceModal from '@/components/CreateWorkspaceModal';
 
@@ -12,6 +13,9 @@ interface Workspace {
   name: string;
   created_at: string;
   metadata: Record<string, any>;
+  organization_id?: number;
+  organization_name?: string;
+  organization_slug?: string;
 }
 
 interface Project {
@@ -27,12 +31,22 @@ interface WorkspaceStats {
   document_count: number;
 }
 
+interface AuthUser {
+  id: number;
+  email: string;
+  name: string;
+  is_active: number;
+  system_role?: string;
+}
+
 export default function WorkspacesPage() {
   const router = useRouter();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceProjects, setWorkspaceProjects] = useState<Record<string, Project[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [selectedOrganization, setSelectedOrganization] = useState<string>('all');
 
   const loadProjectsForWorkspace = async (workspaceSlug: string): Promise<Project[]> => {
     try {
@@ -48,8 +62,16 @@ export default function WorkspacesPage() {
   };
 
   useEffect(() => {
-    const loadWorkspaces = async () => {
+    const loadUserAndWorkspaces = async () => {
       try {
+        // Load user info first
+        const userResponse = await fetch('/api/auth/me');
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          setUser(userData.user);
+        }
+
+        // Load workspaces
         const response = await fetch('/api/workspaces');
         let workspaceData: Workspace[] = [];
         
@@ -90,7 +112,7 @@ export default function WorkspacesPage() {
       }
     };
 
-    loadWorkspaces();
+    loadUserAndWorkspaces();
   }, []);
 
   const reloadWorkspaces = async () => {
@@ -146,6 +168,45 @@ export default function WorkspacesPage() {
     router.push(`/w/${workspaceSlug}/projects/${projectSlug}`);
   };
 
+  // Helper functions for superadmin organization grouping
+  const getUniqueOrganizations = () => {
+    if (!user || user.system_role !== 'super_admin') return [];
+    
+    const orgs = new Set<string>();
+    workspaces.forEach(workspace => {
+      if (workspace.organization_name) {
+        orgs.add(workspace.organization_name);
+      }
+    });
+    return Array.from(orgs).sort();
+  };
+
+  const getFilteredWorkspaces = () => {
+    if (!user || user.system_role !== 'super_admin' || selectedOrganization === 'all') {
+      return workspaces;
+    }
+    return workspaces.filter(workspace => workspace.organization_name === selectedOrganization);
+  };
+
+  const getGroupedWorkspaces = () => {
+    if (!user || user.system_role !== 'super_admin') {
+      return { 'All Workspaces': getFilteredWorkspaces() };
+    }
+
+    const grouped: Record<string, Workspace[]> = {};
+    const filteredWorkspaces = getFilteredWorkspaces();
+    
+    filteredWorkspaces.forEach(workspace => {
+      const orgName = workspace.organization_name || 'Unknown Organization';
+      if (!grouped[orgName]) {
+        grouped[orgName] = [];
+      }
+      grouped[orgName].push(workspace);
+    });
+
+    return grouped;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-gray-900">
@@ -199,6 +260,33 @@ export default function WorkspacesPage() {
           <CreateWorkspaceModal onWorkspaceCreated={reloadWorkspaces} />
         </div>
 
+        {/* Organization Filter for Superadmins */}
+        {user?.system_role === 'super_admin' && getUniqueOrganizations().length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Filter by Organization:
+              </label>
+              <Select value={selectedOrganization} onValueChange={setSelectedOrganization}>
+                <SelectTrigger className="w-64">
+                  <SelectValue placeholder="Select organization" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Organizations</SelectItem>
+                  {getUniqueOrganizations().map(orgName => (
+                    <SelectItem key={orgName} value={orgName}>
+                      <div className="flex items-center">
+                        <Building2 className="w-4 h-4 mr-2" />
+                        {orgName}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
+
         {/* Workspaces Grid */}
         {workspaces.length === 0 ? (
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
@@ -210,67 +298,93 @@ export default function WorkspacesPage() {
             <CreateWorkspaceModal onWorkspaceCreated={reloadWorkspaces} />
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {workspaces.map(workspace => (
-              <div
-                key={workspace.slug}
-                className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition-shadow cursor-pointer group"
-                onClick={() => navigateToWorkspace(workspace.slug)}
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center">
-                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                      <FileBox className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 group-hover:text-blue-600 transition-colors">
-                        {workspace.name}
-                      </h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">/{workspace.slug}</p>
-                    </div>
+          <div className="space-y-8">
+            {Object.entries(getGroupedWorkspaces()).map(([groupName, groupWorkspaces]) => (
+              <div key={groupName}>
+                {/* Organization Header for Superadmins */}
+                {user?.system_role === 'super_admin' && groupWorkspaces.length > 0 && (
+                  <div className="flex items-center mb-4">
+                    <Building2 className="w-5 h-5 text-gray-600 dark:text-gray-400 mr-2" />
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                      {groupName}
+                    </h2>
+                    <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">
+                      ({groupWorkspaces.length} workspace{groupWorkspaces.length !== 1 ? 's' : ''})
+                    </span>
                   </div>
-                </div>
+                )}
 
-                <div className="mb-4">
-                  <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">Projects</h4>
-                  {workspaceProjects[workspace.slug] && workspaceProjects[workspace.slug].length > 0 ? (
-                    <div className="space-y-2">
-                      {workspaceProjects[workspace.slug].map(project => (
-                        <div key={project.id} className="flex items-center justify-between text-sm">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigateToProject(workspace.slug, project.slug);
-                            }}
-                            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline text-left transition-colors"
-                          >
-                            {project.name}
-                          </button>
-                          <span className="text-gray-500 dark:text-gray-400">
-                            {project.document_count} {project.document_count === 1 ? 'file' : 'files'}
-                          </span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {groupWorkspaces.map(workspace => (
+                    <div
+                      key={workspace.slug}
+                      className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition-shadow cursor-pointer group"
+                      onClick={() => navigateToWorkspace(workspace.slug)}
+                    >
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex items-center">
+                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                            <FileBox className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 group-hover:text-blue-600 transition-colors">
+                              {workspace.name}
+                            </h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">/{workspace.slug}</p>
+                            {/* Show organization name for superadmins */}
+                            {user?.system_role === 'super_admin' && workspace.organization_name && (
+                              <p className="text-xs text-gray-400 dark:text-gray-500 flex items-center mt-1">
+                                <Building2 className="w-3 h-3 mr-1" />
+                                {workspace.organization_name}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500 dark:text-gray-400">No projects yet</p>
-                  )}
-                </div>
+                      </div>
 
-                <div className="flex justify-between items-center pt-4 border-t border-gray-100">
-                  <span className="text-xs text-gray-400">
-                    Created {new Date(workspace.created_at).toLocaleDateString()}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigateToWorkspace(workspace.slug);
-                    }}
-                  >
-                    Enter Workspace
-                  </Button>
+                      <div className="mb-4">
+                        <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">Projects</h4>
+                        {workspaceProjects[workspace.slug] && workspaceProjects[workspace.slug].length > 0 ? (
+                          <div className="space-y-2">
+                            {workspaceProjects[workspace.slug].map(project => (
+                              <div key={project.id} className="flex items-center justify-between text-sm">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigateToProject(workspace.slug, project.slug);
+                                  }}
+                                  className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline text-left transition-colors"
+                                >
+                                  {project.name}
+                                </button>
+                                <span className="text-gray-500 dark:text-gray-400">
+                                  {project.document_count} {project.document_count === 1 ? 'file' : 'files'}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-500 dark:text-gray-400">No projects yet</p>
+                        )}
+                      </div>
+
+                      <div className="flex justify-between items-center pt-4 border-t border-gray-100">
+                        <span className="text-xs text-gray-400">
+                          Created {new Date(workspace.created_at).toLocaleDateString()}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigateToWorkspace(workspace.slug);
+                          }}
+                        >
+                          Enter Workspace
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}

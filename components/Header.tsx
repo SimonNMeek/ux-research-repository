@@ -19,6 +19,9 @@ interface Workspace {
   id: number;
   slug: string;
   name: string;
+  organization_id?: number;
+  organization_name?: string;
+  organization_slug?: string;
 }
 
 export default function Header() {
@@ -208,24 +211,65 @@ export default function Header() {
               </div>
               
               {workspaces.length > 0 ? (
-                workspaces.map((workspace) => (
-                  <button
-                    key={workspace.slug}
-                    onClick={() => handleWorkspaceChange(workspace)}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center ${
-                      currentWorkspace?.slug === workspace.slug ? 'bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'
-                    }`}
-                  >
-                    <Building2 className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
-                    <div>
-                      <div className="font-medium">{workspace.name}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">/{workspace.slug}</div>
-                    </div>
-                    {currentWorkspace?.slug === workspace.slug && (
-                      <div className="ml-auto w-2 h-2 bg-blue-500 rounded-full"></div>
-                    )}
-                  </button>
-                ))
+                user?.system_role === 'super_admin' && workspaces[0]?.organization_name ? (
+                  // Group workspaces by organization for superadmins
+                  (() => {
+                    const groupedWorkspaces = workspaces.reduce((acc, workspace) => {
+                      const orgName = workspace.organization_name || 'Unknown Organization';
+                      if (!acc[orgName]) {
+                        acc[orgName] = [];
+                      }
+                      acc[orgName].push(workspace);
+                      return acc;
+                    }, {} as Record<string, Workspace[]>);
+
+                    return Object.entries(groupedWorkspaces).map(([orgName, orgWorkspaces]) => (
+                      <div key={orgName}>
+                        <div className="px-4 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-100 dark:border-gray-700">
+                          {orgName}
+                        </div>
+                        {orgWorkspaces.map((workspace) => (
+                          <button
+                            key={workspace.slug}
+                            onClick={() => handleWorkspaceChange(workspace)}
+                            className={`w-full text-left px-6 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center ${
+                              currentWorkspace?.slug === workspace.slug ? 'bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'
+                            }`}
+                          >
+                            <Building2 className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
+                            <div>
+                              <div className="font-medium">{workspace.name}</div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">/{workspace.slug}</div>
+                            </div>
+                            {currentWorkspace?.slug === workspace.slug && (
+                              <div className="ml-auto w-2 h-2 bg-blue-500 rounded-full"></div>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    ));
+                  })()
+                ) : (
+                  // Regular flat list for non-superadmins
+                  workspaces.map((workspace) => (
+                    <button
+                      key={workspace.slug}
+                      onClick={() => handleWorkspaceChange(workspace)}
+                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center ${
+                        currentWorkspace?.slug === workspace.slug ? 'bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      <Building2 className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
+                      <div>
+                        <div className="font-medium">{workspace.name}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">/{workspace.slug}</div>
+                      </div>
+                      {currentWorkspace?.slug === workspace.slug && (
+                        <div className="ml-auto w-2 h-2 bg-blue-500 rounded-full"></div>
+                      )}
+                    </button>
+                  ))
+                )
               ) : (
                 <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">Loading workspaces...</div>
               )}
