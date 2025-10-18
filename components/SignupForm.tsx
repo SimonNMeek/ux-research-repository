@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,8 +11,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, UserPlus, Check, ArrowLeft, ArrowRight, Building2, Users } from 'lucide-react';
 
+interface InvitationData {
+  email: string;
+  organization: {
+    id: number;
+    name: string;
+    slug: string;
+  };
+  role: string;
+  expiresAt: string;
+}
+
 export default function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -23,11 +35,48 @@ export default function SignupForm() {
     organizationType: 'personal', // 'personal' or 'company'
     joinExisting: false,
     inviteCode: '',
+    inviteToken: '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [step, setStep] = useState(1); // 1: Basic info, 2: Organization setup
+  const [invitationData, setInvitationData] = useState<InvitationData | null>(null);
+  const [validatingInvitation, setValidatingInvitation] = useState(false);
+
+  // Check for invitation token on component mount
+  useEffect(() => {
+    const inviteToken = searchParams.get('invite');
+    if (inviteToken) {
+      validateInvitation(inviteToken);
+    }
+  }, [searchParams]);
+
+  const validateInvitation = async (token: string) => {
+    setValidatingInvitation(true);
+    setError('');
+    
+    try {
+      const response = await fetch(`/api/invitations/${token}`);
+      const data = await response.json();
+      
+      if (response.ok) {
+        setInvitationData(data.invitation);
+        setFormData(prev => ({
+          ...prev,
+          email: data.invitation.email,
+          inviteToken: token
+        }));
+        setError('');
+      } else {
+        setError(data.error || 'Invalid invitation');
+      }
+    } catch (err) {
+      setError('Failed to validate invitation');
+    } finally {
+      setValidatingInvitation(false);
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
@@ -62,6 +111,12 @@ export default function SignupForm() {
       return;
     }
 
+    // Skip step 2 if user has an invitation
+    if (invitationData) {
+      handleSubmit(new Event('submit') as any);
+      return;
+    }
+
     setStep(2);
     setError('');
   };
@@ -76,8 +131,8 @@ export default function SignupForm() {
     setError('');
     setLoading(true);
 
-    // Validate organization fields if creating new org
-    if (!formData.joinExisting && !formData.organizationName) {
+    // Validate organization fields if creating new org and not invited
+    if (!invitationData && !formData.joinExisting && !formData.organizationName) {
       setError('Please enter an organization name or choose to join an existing organization');
       setLoading(false);
       return;
@@ -87,16 +142,17 @@ export default function SignupForm() {
       const response = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          email: formData.email,
-          password: formData.password,
-          organizationName: formData.organizationName,
-          organizationType: formData.organizationType,
-          joinExisting: formData.joinExisting,
-          inviteCode: formData.inviteCode,
-        }),
+               body: JSON.stringify({
+                 firstName: formData.firstName,
+                 lastName: formData.lastName,
+                 email: formData.email,
+                 password: formData.password,
+                 organizationName: formData.organizationName,
+                 organizationType: formData.organizationType,
+                 joinExisting: formData.joinExisting,
+                 inviteCode: formData.inviteCode,
+                 inviteToken: formData.inviteToken,
+               }),
       });
 
       const data = await response.json();
@@ -138,19 +194,40 @@ export default function SignupForm() {
     );
   }
 
-  const renderStep1 = () => (
-    <Card className="w-full max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle className="text-2xl">Create Account</CardTitle>
-        <CardDescription>
-          Step 1: Your personal information
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+         const renderStep1 = () => (
+           <Card className="w-full max-w-md mx-auto">
+             <CardHeader>
+               <CardTitle className="text-2xl">
+                 {invitationData ? 'Join ' + invitationData.organization.name : 'Create Account'}
+               </CardTitle>
+               <CardDescription>
+                 {invitationData ? 
+                   `You've been invited to join ${invitationData.organization.name} as a ${invitationData.role}` :
+                   'Step 1: Your personal information'
+                 }
+               </CardDescription>
+             </CardHeader>
+             <CardContent>
         <div className="space-y-4">
+          {validatingInvitation && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin mr-2" />
+              <span>Validating invitation...</span>
+            </div>
+          )}
           {error && (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          {invitationData && (
+            <Alert>
+              <AlertDescription>
+                <strong>Invitation Details:</strong><br />
+                Organization: {invitationData.organization.name}<br />
+                Role: {invitationData.role}<br />
+                Email: {invitationData.email}
+              </AlertDescription>
             </Alert>
           )}
 
@@ -183,19 +260,24 @@ export default function SignupForm() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="john.smith@example.com"
-              disabled={loading}
-              required
-            />
-          </div>
+                 <div className="space-y-2">
+                   <Label htmlFor="email">Email</Label>
+                   <Input
+                     id="email"
+                     name="email"
+                     type="email"
+                     value={formData.email}
+                     onChange={handleChange}
+                     placeholder="john.smith@example.com"
+                     disabled={loading || !!invitationData}
+                     required
+                   />
+                   {invitationData && (
+                     <p className="text-xs text-gray-500">
+                       Email is pre-filled from your invitation
+                     </p>
+                   )}
+                 </div>
 
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
@@ -229,9 +311,9 @@ export default function SignupForm() {
             type="button"
             onClick={handleNextStep}
             className="w-full"
-            disabled={loading}
+            disabled={loading || validatingInvitation}
           >
-            Next: Organization Setup
+            {invitationData ? 'Create Account' : 'Next: Organization Setup'}
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
 

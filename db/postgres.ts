@@ -23,8 +23,11 @@ export function getPostgresPool(): Pool {
     connectionString: databaseUrl,
     max: 20, // Maximum number of clients in the pool
     idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-    connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection cannot be established
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    connectionTimeoutMillis: 30000, // Return an error after 30 seconds if connection cannot be established
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    // Add keep-alive settings for better connection stability
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10000,
   });
 
   // Handle pool errors
@@ -36,14 +39,36 @@ export function getPostgresPool(): Pool {
 }
 
 /**
- * Execute a query with automatic connection management
+ * Execute a query with automatic connection management and retry logic
  */
 export async function query<T = any>(
   text: string,
-  params?: any[]
+  params?: any[],
+  retries: number = 2
 ): Promise<QueryResult<T>> {
   const pool = getPostgresPool();
-  return await pool.query(text, params);
+  
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await pool.query(text, params);
+    } catch (error) {
+      console.error(`PostgreSQL query error (attempt ${attempt + 1}/${retries + 1}):`, {
+        query: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+        params: params?.slice(0, 3), // Log first 3 params for debugging
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      // If this is the last attempt or it's not a connection error, throw
+      if (attempt === retries || !(error instanceof Error && error.message.includes('ETIMEDOUT'))) {
+        throw error;
+      }
+      
+      // Wait before retrying (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+    }
+  }
+  
+  throw new Error('All retry attempts failed');
 }
 
 /**

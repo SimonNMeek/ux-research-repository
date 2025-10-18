@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbAdapter, getDbType } from '@/db/adapter';
 import { getSessionCookie, validateSession } from '@/lib/auth';
+import { createInvitation, checkInvitationLimits } from '@/lib/invitations';
+import { sendInvitationEmail, generateSignupUrl } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   try {
@@ -66,9 +68,9 @@ export async function POST(request: NextRequest) {
       existingUser = userStmt.get([email]);
     }
 
+    // Check if user is already in this organization (regardless of whether user exists in system)
+    let existingOrgUser;
     if (existingUser) {
-      // Check if user is already in this organization
-      let existingOrgUser;
       if (dbType === 'postgres') {
         const orgUserResult = await adapter.query(
           'SELECT user_id FROM user_organizations WHERE user_id = $1 AND organization_id = $2',
@@ -88,34 +90,59 @@ export async function POST(request: NextRequest) {
           { status: 409 }
         );
       }
-
-      // Add existing user to organization
-      if (dbType === 'postgres') {
-        await adapter.query(
-          `INSERT INTO user_organizations (user_id, organization_id, role, invited_by)
-           VALUES ($1, $2, $3, $4)`,
-          [existingUser.id, organization.id, role || 'member', user.id]
-        );
-      } else {
-        const stmt = adapter.prepare(
-          `INSERT INTO user_organizations (user_id, organization_id, role, invited_by)
-           VALUES (?, ?, ?, ?)`
-        );
-        stmt.run([existingUser.id, organization.id, role || 'member', user.id]);
-      }
-
-      return NextResponse.json({
-        message: 'User added to organization successfully',
-        userId: existingUser.id
-      });
     }
 
-    // For now, we'll just return a message that the user needs to sign up first
-    // In a full implementation, you'd create an invitation record and send an email
+    // For both existing and new users, send an invitation email
+    // (existing users will get a login link, new users will get a signup link)
+
+    // Check invitation limits (10 per organization)
+    const withinLimits = await checkInvitationLimits(organization.id, 10);
+    if (!withinLimits) {
+      return NextResponse.json(
+        { error: 'You have reached the maximum number of pending invitations (10). Please wait for some to be accepted or expired.' },
+        { status: 429 }
+      );
+    }
+
+    // Create invitation record
+    const invitationResult = await createInvitation({
+      email,
+      organizationId: organization.id,
+      invitedBy: user.id,
+      role: role || 'member'
+    });
+
+    if (!invitationResult.success) {
+      return NextResponse.json(
+        { error: invitationResult.error || 'Failed to create invitation' },
+        { status: 500 }
+      );
+    }
+
+    // Send invitation email
+    const signupUrl = generateSignupUrl(invitationResult.invitation!.token);
+    const emailResult = await sendInvitationEmail({
+      to: email,
+      organizationName: organization.name,
+      inviterName: user.name,
+      signupUrl,
+      role: role || 'member',
+      isExistingUser: !!existingUser // Pass whether user already exists
+    });
+
+    if (!emailResult.success) {
+      console.error('Failed to send invitation email:', emailResult.error);
+      // Still return success but log the error - invitation was created
+    }
+
     return NextResponse.json({
-      message: 'User invitation created. The user will need to sign up with this email address to join your organization.',
+      message: existingUser 
+        ? 'Invitation sent successfully! The user will receive an email with instructions to accept the invitation.'
+        : 'Invitation sent successfully! The user will receive an email with instructions to create an account and join your organization.',
       email: email,
-      organizationName: organization.name
+      organizationName: organization.name,
+      emailSent: emailResult.success,
+      isExistingUser: !!existingUser
     });
 
   } catch (error) {

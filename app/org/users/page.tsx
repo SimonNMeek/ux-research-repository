@@ -29,10 +29,17 @@ interface Organization {
   slug: string;
 }
 
+interface OrganizationUsersResponse {
+  organization: Organization;
+  users: User[];
+  currentUserRole: string;
+}
+
 export default function OrganizationUsersPage() {
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [organization, setOrganization] = useState<Organization | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -56,9 +63,10 @@ export default function OrganizationUsersPage() {
       if (!response.ok) {
         throw new Error('Failed to fetch organization users');
       }
-      const data = await response.json();
+      const data: OrganizationUsersResponse = await response.json();
       setUsers(data.users || []);
       setOrganization(data.organization || null);
+      setCurrentUserRole(data.currentUserRole || '');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load users');
     } finally {
@@ -108,6 +116,26 @@ export default function OrganizationUsersPage() {
       fetchOrganizationUsers(); // Refresh the list
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update user role');
+    }
+  };
+
+  const handleRemoveUser = async (user: User) => {
+    if (!confirm(`Are you sure you want to remove ${user.name} from the organization?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/org/users/${user.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to remove user');
+      }
+
+      fetchOrganizationUsers(); // Refresh the list
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove user');
     }
   };
 
@@ -169,10 +197,12 @@ export default function OrganizationUsersPage() {
                     {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''} in your organization
                   </CardDescription>
                 </div>
-                <Button onClick={() => setShowInviteForm(!showInviteForm)}>
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  Invite User
-                </Button>
+                {(currentUserRole === 'owner' || currentUserRole === 'admin') && (
+                  <Button onClick={() => setShowInviteForm(!showInviteForm)}>
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Invite User
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -189,7 +219,7 @@ export default function OrganizationUsersPage() {
               </div>
 
               {/* Invite User Form */}
-              {showInviteForm && (
+              {showInviteForm && (currentUserRole === 'owner' || currentUserRole === 'admin') && (
                 <Card className="mb-4">
                   <CardHeader>
                     <CardTitle>Invite New User</CardTitle>
@@ -305,19 +335,28 @@ export default function OrganizationUsersPage() {
                           <Badge className={getRoleBadgeColor(user.role)}>
                             {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                           </Badge>
-                          {user.role !== 'owner' && (
-                            <Select
-                              value={user.role}
-                              onValueChange={(newRole) => handleUpdateUserRole(user.id, newRole)}
-                            >
-                              <SelectTrigger className="w-32">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="member">Member</SelectItem>
-                                <SelectItem value="admin">Admin</SelectItem>
-                              </SelectContent>
-                            </Select>
+                          {user.role !== 'owner' && (currentUserRole === 'owner' || currentUserRole === 'admin') && (
+                            <>
+                              <Select
+                                value={user.role}
+                                onValueChange={(newRole) => handleUpdateUserRole(user.id, newRole)}
+                              >
+                                <SelectTrigger className="w-32">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="member">Member</SelectItem>
+                                  <SelectItem value="admin">Admin</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleRemoveUser(user)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
                           )}
                         </div>
                       </div>

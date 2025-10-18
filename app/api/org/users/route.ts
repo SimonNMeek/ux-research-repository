@@ -17,14 +17,14 @@ export async function GET(request: NextRequest) {
     const adapter = getDbAdapter();
     const dbType = getDbType();
 
-    // Get user's organization (assuming they're in one organization for now)
+    // Get user's organization (allow any member to view, not just owners)
     let organization;
     if (dbType === 'postgres') {
       const orgResult = await adapter.query(
         `SELECT o.id, o.name, o.slug 
          FROM organizations o
          INNER JOIN user_organizations uo ON o.id = uo.organization_id
-         WHERE uo.user_id = $1 AND uo.role = 'owner'
+         WHERE uo.user_id = $1
          LIMIT 1`,
         [user.id]
       );
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
         `SELECT o.id, o.name, o.slug 
          FROM organizations o
          INNER JOIN user_organizations uo ON o.id = uo.organization_id
-         WHERE uo.user_id = ? AND uo.role = 'owner'
+         WHERE uo.user_id = ?
          LIMIT 1`
       );
       organization = orgStmt.get([user.id]);
@@ -42,6 +42,22 @@ export async function GET(request: NextRequest) {
 
     if (!organization) {
       return NextResponse.json({ error: 'Organization not found or insufficient permissions' }, { status: 404 });
+    }
+
+    // Get current user's role in the organization
+    let currentUserRole;
+    if (dbType === 'postgres') {
+      const roleResult = await adapter.query(
+        'SELECT role FROM user_organizations WHERE user_id = $1 AND organization_id = $2',
+        [user.id, organization.id]
+      );
+      currentUserRole = roleResult.rows[0]?.role;
+    } else {
+      const roleStmt = adapter.prepare(
+        'SELECT role FROM user_organizations WHERE user_id = ? AND organization_id = ?'
+      );
+      const roleResult = roleStmt.get([user.id, organization.id]);
+      currentUserRole = roleResult?.role;
     }
 
     // Get all users in the organization
@@ -69,7 +85,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       organization,
-      users
+      users,
+      currentUserRole
     });
 
   } catch (error) {

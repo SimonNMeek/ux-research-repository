@@ -4,7 +4,7 @@ import { getSessionCookie, validateSession } from '@/lib/auth';
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
     const sessionId = await getSessionCookie();
@@ -18,7 +18,8 @@ export async function PUT(
     }
 
     const { role } = await request.json();
-    const targetUserId = parseInt(params.userId);
+    const { userId } = await params;
+    const targetUserId = parseInt(userId);
 
     if (!role || !['member', 'admin'].includes(role)) {
       return NextResponse.json(
