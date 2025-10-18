@@ -13,8 +13,8 @@ function LoginForm() {
   const params = useSearchParams();
   const redirect = useMemo(() => params.get("redirect") || "/workspaces", [params]);
 
-  const [email, setEmail] = useState("admin@sol.com");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,6 +62,7 @@ function LoginForm() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email address"
                 className="mt-1 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                 required
                 autoComplete="username"
@@ -74,6 +75,7 @@ function LoginForm() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
                 className="mt-1 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                 required
                 autoComplete="current-password"
@@ -83,7 +85,7 @@ function LoginForm() {
               {loading ? "Signing in…" : "Sign in"}
             </Button>
             <p className="text-xs text-gray-600 dark:text-gray-400">
-              Demo credentials: admin@sol.com / admin123
+              Enter your email and password to sign in
             </p>
           </form>
         </CardContent>
