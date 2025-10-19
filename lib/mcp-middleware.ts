@@ -16,6 +16,11 @@ export interface McpContext {
     name: string;
     organization_id: number;
   };
+  organization?: {
+    id: number;
+    name: string;
+    slug: string;
+  };
 }
 
 /**
@@ -97,21 +102,28 @@ export async function resolveWorkspace(
     return null;
   }
 
-  // Check if user has access (skip for super admins)
+  // Check access based on API key type
   if (user.system_role !== 'super_admin') {
     let hasAccess: boolean;
-    if (dbType === 'postgres') {
-      const result = await adapter.query(
-        `SELECT 1 FROM user_workspaces WHERE user_id = $1 AND workspace_id = $2`,
-        [user.id, workspace.id]
-      );
-      hasAccess = result.rows.length > 0;
+
+    if (user.scope_type === 'organization') {
+      // For organization-scoped API keys, check if workspace belongs to the organization
+      hasAccess = user.organization_id === workspace.organization_id;
     } else {
-      const db = getDb();
-      const row = db
-        .prepare(`SELECT 1 FROM user_workspaces WHERE user_id = ? AND workspace_id = ?`)
-        .get(user.id, workspace.id);
-      hasAccess = !!row;
+      // For user-scoped API keys, check if user has access to the workspace
+      if (dbType === 'postgres') {
+        const result = await adapter.query(
+          `SELECT 1 FROM user_workspaces WHERE user_id = $1 AND workspace_id = $2`,
+          [user.id, workspace.id]
+        );
+        hasAccess = result.rows.length > 0;
+      } else {
+        const db = getDb();
+        const row = db
+          .prepare(`SELECT 1 FROM user_workspaces WHERE user_id = ? AND workspace_id = ?`)
+          .get(user.id, workspace.id);
+        hasAccess = !!row;
+      }
     }
 
     if (!hasAccess) {
@@ -123,6 +135,43 @@ export async function resolveWorkspace(
 }
 
 /**
+ * Resolve organization context for organization-scoped API keys
+ */
+export async function resolveOrganization(
+  user: ApiKeyUser
+): Promise<
+  | {
+      id: number;
+      name: string;
+      slug: string;
+    }
+  | null
+> {
+  if (user.scope_type !== 'organization' || !user.organization_id) {
+    return null;
+  }
+
+  const adapter = getDbAdapter();
+  const dbType = getDbType();
+
+  let organization: any;
+  if (dbType === 'postgres') {
+    const result = await adapter.query(
+      'SELECT id, name, slug FROM organizations WHERE id = $1',
+      [user.organization_id]
+    );
+    organization = result.rows[0];
+  } else {
+    const db = getDb();
+    organization = db
+      .prepare('SELECT id, name, slug FROM organizations WHERE id = ?')
+      .get(user.organization_id);
+  }
+
+  return organization;
+}
+
+/**
  * Track API usage for the request
  */
 export async function trackMcpUsage(
@@ -131,7 +180,12 @@ export async function trackMcpUsage(
   workspaceId?: number
 ): Promise<void> {
   try {
-    await trackApiUsage(user.api_key_id, endpoint, workspaceId);
+    await trackApiUsage(
+      user.api_key_id, 
+      endpoint, 
+      workspaceId, 
+      user.organization_id
+    );
   } catch (error) {
     console.error('Error tracking API usage:', error);
     // Don't fail the request if tracking fails
@@ -187,7 +241,10 @@ export function withMcpAuth(
         workspace = resolved;
       }
 
-      const context: McpContext = { user, workspace };
+      // Resolve organization context for organization-scoped API keys
+      const organization = await resolveOrganization(user);
+
+      const context: McpContext = { user, workspace, organization };
 
       const response = await handler(context, request);
       return addCorsHeaders(response);

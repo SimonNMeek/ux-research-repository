@@ -1,6 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from 'react';
-import { User, Settings, CreditCard, LogOut, ChevronDown, Building2, Moon, Sun, Plus, Shield } from 'lucide-react';
+import { User, Settings, CreditCard, LogOut, ChevronDown, Building2, Moon, Sun, Plus, Shield, Key } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useRouter, usePathname } from 'next/navigation';
 import { useDarkMode } from '@/hooks/useDarkMode';
@@ -389,6 +389,16 @@ export default function Header() {
             >
               <User className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
               Organization Users
+            </button>
+            <button 
+              onClick={() => {
+                setDropdownOpen(false);
+                router.push('/org/api-keys');
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+            >
+              <Key className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
+              API Keys
             </button>
             
             {/* Super Admin Section */}

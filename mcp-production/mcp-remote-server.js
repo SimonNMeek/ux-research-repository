@@ -319,10 +319,22 @@ app.post(['/', '/mcp'], async (req, res) => {
 
     if (method === 'tools/call') {
       const { name, arguments: args } = params || {};
-      const apiKey = process.env.SOL_RESEARCH_API_KEY;
-      if (!apiKey) {
-        return res.json({ jsonrpc: '2.0', id, error: { code: -32600, message: 'SOL_RESEARCH_API_KEY not configured' } });
+      
+      // Extract Bearer token from Authorization header
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.json({ 
+          jsonrpc: '2.0', 
+          id, 
+          error: { 
+            code: -32600, 
+            message: 'Authentication required. Please provide a valid API key in the Authorization header: Bearer sk-...' 
+          } 
+        });
       }
+      
+      const apiKey = authHeader.substring(7); // Remove "Bearer " prefix
+      
       try {
         const response = await fetch('https://ux-repo-web.vercel.app/api/claude-tool', {
           method: 'POST',
@@ -365,8 +377,12 @@ app.get('/mcp', (req, res) => {
     server_title: 'Sol Research MCP',
     server_version: '1.0.0',
     transport: 'streamable-http',
-    capabilities: ['tools', 'resources', 'prompts', 'logging'],
-    auth_required: false
+    capabilities: ['tools', 'resources', 'prompts'],
+    auth_required: true,
+    auth: {
+      type: 'bearer',
+      description: 'Organization or user API key required'
+    }
   });
 });
 
@@ -402,8 +418,11 @@ app.get('/.well-known/mcp', (req, res) => {
       tools: { list: true, call: true }, 
       resources: { list: true, read: true }, 
       prompts: { list: true, get: true }
+    },
+    auth: {
+      type: 'bearer',
+      description: 'Organization or user API key required'
     }
-    // Note: auth field omitted when not required
   });
 });
 
