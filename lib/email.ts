@@ -37,7 +37,7 @@ export async function sendInvitationEmail(data: InvitationEmailData) {
   // List of possible sender addresses to try
   const senderAddresses = [
     process.env.RESEND_FROM_ADDRESS,
-    'Sol Research <onboarding@resend.dev>',
+    'onboarding@resend.dev',
     'noreply@resend.dev',
     'hello@resend.dev'
   ].filter(Boolean);

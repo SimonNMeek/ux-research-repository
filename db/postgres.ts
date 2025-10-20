@@ -21,13 +21,17 @@ export function getPostgresPool(): Pool {
 
   pool = new Pool({
     connectionString: databaseUrl,
-    max: 20, // Maximum number of clients in the pool
-    idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-    connectionTimeoutMillis: 30000, // Return an error after 30 seconds if connection cannot be established
+    max: 10, // Reduced pool size to avoid connection exhaustion
+    min: 2, // Keep minimum connections alive
+    idleTimeoutMillis: 60000, // Close idle clients after 60 seconds
+    connectionTimeoutMillis: 10000, // Reduced timeout to 10 seconds
+    acquireTimeoutMillis: 10000, // Timeout for acquiring connection from pool
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
     // Add keep-alive settings for better connection stability
     keepAlive: true,
     keepAliveInitialDelayMillis: 10000,
+    // Add statement timeout to prevent long-running queries
+    statement_timeout: 30000, // 30 seconds
   });
 
   // Handle pool errors
