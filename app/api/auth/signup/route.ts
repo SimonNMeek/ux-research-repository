@@ -192,36 +192,69 @@ export async function POST(request: NextRequest) {
         workspaceId = workspaceResult.lastInsertRowid;
       }
     } else {
-      // For invitations, find an existing workspace in the organization
+      // For invitations, find ALL existing workspaces in the organization
       if (dbType === 'postgres') {
         const workspaceResult = await adapter.query(
-          'SELECT id FROM workspaces WHERE organization_id = $1 LIMIT 1',
+          'SELECT id FROM workspaces WHERE organization_id = $1',
           [organizationId]
         );
-        workspaceId = workspaceResult.rows[0]?.id;
+        workspaceId = workspaceResult.rows[0]?.id; // Keep first workspace ID for backward compatibility
       } else {
-        const workspaceStmt = adapter.prepare('SELECT id FROM workspaces WHERE organization_id = ? LIMIT 1');
-        const workspaceResult = workspaceStmt.get([organizationId]);
-        workspaceId = workspaceResult?.id;
+        const workspaceStmt = adapter.prepare('SELECT id FROM workspaces WHERE organization_id = ?');
+        const workspaceResults = workspaceStmt.all([organizationId]);
+        workspaceId = workspaceResults[0]?.id; // Keep first workspace ID for backward compatibility
       }
     }
 
-    // Grant user access to the workspace with appropriate role
+    // Grant user access to workspaces with appropriate role
     const workspaceRole = invitation ? invitation.role : 'owner'; // Use invitation role if available, otherwise owner for new org creators
     const workspaceGrantedBy = invitation ? invitation.invited_by : userId; // Use inviter as granter if invited, otherwise self
     
-    if (dbType === 'postgres') {
-      await adapter.query(
-        `INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by)
-         VALUES ($1, $2, $3, $4)`,
-        [userId, workspaceId, workspaceRole, workspaceGrantedBy]
-      );
+    if (invitation) {
+      // For invitations, grant access to ALL workspaces in the organization
+      let allWorkspaces;
+      if (dbType === 'postgres') {
+        const workspaceResult = await adapter.query(
+          'SELECT id FROM workspaces WHERE organization_id = $1',
+          [organizationId]
+        );
+        allWorkspaces = workspaceResult.rows;
+      } else {
+        const workspaceStmt = adapter.prepare('SELECT id FROM workspaces WHERE organization_id = ?');
+        allWorkspaces = workspaceStmt.all([organizationId]);
+      }
+
+      // Grant access to each workspace
+      for (const workspace of allWorkspaces) {
+        if (dbType === 'postgres') {
+          await adapter.query(
+            `INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by)
+             VALUES ($1, $2, $3, $4)`,
+            [userId, workspace.id, workspaceRole, workspaceGrantedBy]
+          );
+        } else {
+          const stmt = adapter.prepare(
+            `INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by)
+             VALUES (?, ?, ?, ?)`
+          );
+          stmt.run([userId, workspace.id, workspaceRole, workspaceGrantedBy]);
+        }
+      }
     } else {
-      const stmt = adapter.prepare(
-        `INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by)
-         VALUES (?, ?, ?, ?)`
-      );
-      stmt.run([userId, workspaceId, workspaceRole, workspaceGrantedBy]);
+      // For new organizations, grant access to the single workspace created
+      if (dbType === 'postgres') {
+        await adapter.query(
+          `INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by)
+           VALUES ($1, $2, $3, $4)`,
+          [userId, workspaceId, workspaceRole, workspaceGrantedBy]
+        );
+      } else {
+        const stmt = adapter.prepare(
+          `INSERT INTO user_workspaces (user_id, workspace_id, role, granted_by)
+           VALUES (?, ?, ?, ?)`
+        );
+        stmt.run([userId, workspaceId, workspaceRole, workspaceGrantedBy]);
+      }
     }
 
     // Mark invitation as accepted if this was an invitation signup
