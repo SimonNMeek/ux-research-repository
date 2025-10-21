@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSessionCookie, validateSession } from '@/lib/auth';
-import { getDb } from '@/db';
+import { getDbAdapter, getDbType } from '@/db/adapter';
 
 export async function PUT(request: Request) {
   try {
@@ -17,12 +17,26 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
-    const db = getDb();
-    const stmt = db.prepare('UPDATE users SET name = ? WHERE id = ?');
-    stmt.run(name.trim(), user.id);
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
+
+    // Update user name
+    if (dbType === 'postgres') {
+      await adapter.query('UPDATE users SET name = $1 WHERE id = $2', [name.trim(), user.id]);
+    } else {
+      const stmt = adapter.prepare('UPDATE users SET name = ? WHERE id = ?');
+      stmt.run(name.trim(), user.id);
+    }
 
     // Return updated user
-    const updatedUser = db.prepare('SELECT id, email, name, is_active FROM users WHERE id = ?').get(user.id);
+    let updatedUser;
+    if (dbType === 'postgres') {
+      const result = await adapter.query('SELECT id, email, name, is_active FROM users WHERE id = $1', [user.id]);
+      updatedUser = result.rows[0];
+    } else {
+      const stmt = adapter.prepare('SELECT id, email, name, is_active FROM users WHERE id = ?');
+      updatedUser = stmt.get(user.id);
+    }
     
     return NextResponse.json({ user: updatedUser });
   } catch (error) {
