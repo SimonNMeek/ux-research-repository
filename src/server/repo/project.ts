@@ -25,8 +25,7 @@ export class ProjectRepo {
       const result = await adapter.query('SELECT * FROM projects WHERE workspace_id = $1 ORDER BY name', [workspaceId]);
       rows = result.rows;
     } else {
-      const db = this.getDbConnection();
-      rows = db.prepare('SELECT * FROM projects WHERE workspace_id = ? ORDER BY name').all(workspaceId);
+      rows = adapter.prepare('SELECT * FROM projects WHERE workspace_id = ? ORDER BY name').all(workspaceId);
     }
     
     return rows.map(row => {
