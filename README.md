@@ -51,3 +51,4 @@ Tools exposed:
 - `add_tag { noteId: number; tag: string }`
 
 Sample usage (stdin/stdout MCP client required). The server prints no HTTP port; it speaks MCP over stdio.
+# AWS Recovery Test - Tue Oct 21 07:53:53 BST 2025
