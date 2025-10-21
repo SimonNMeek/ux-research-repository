@@ -50,7 +50,7 @@ const handler: WorkspaceRouteHandler = async (context, req) => {
       }
       
       // Get favorites
-      const results = documentRepo.getFavorites(projectIds, { limit });
+      const results = await documentRepo.getFavorites(projectIds, { limit });
       const duration = Date.now() - startTime;
       
       return new Response(

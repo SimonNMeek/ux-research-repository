@@ -383,14 +383,32 @@ export class DocumentRepo {
   }
 
   // Get favorite documents
-  getFavorites(projectIds: number[], options: { limit?: number } = {}): DocumentSearchResult[] {
+  async getFavorites(projectIds: number[], options: { limit?: number } = {}): Promise<DocumentSearchResult[]> {
     if (projectIds.length === 0) return [];
     
     const { limit = 50 } = options;
-    const placeholders = projectIds.map(() => '?').join(',');
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
     
-    const rows = this.getDbConnection()
-      .prepare(`
+    let rows: any[];
+    if (dbType === 'postgres') {
+      const placeholders = projectIds.map((_, i) => `$${i + 1}`).join(',');
+      const result = await adapter.query(`
+        SELECT 
+          d.*,
+          p.slug as project_slug,
+          LEFT(d.body, 200) as snippet
+        FROM documents d
+        JOIN projects p ON d.project_id = p.id
+        WHERE d.project_id IN (${placeholders})
+          AND d.is_favorite = true
+        ORDER BY d.created_at DESC
+        LIMIT $${projectIds.length + 1}
+      `, [...projectIds, limit]);
+      rows = result.rows;
+    } else {
+      const placeholders = projectIds.map(() => '?').join(',');
+      rows = adapter.prepare(`
         SELECT 
           d.*,
           p.slug as project_slug,
@@ -401,8 +419,8 @@ export class DocumentRepo {
           AND d.is_favorite = 1
         ORDER BY d.created_at DESC
         LIMIT ?
-      `)
-      .all(...projectIds, limit) as any[];
+      `).all(...projectIds, limit) as any[];
+    }
     
     return rows.map(row => ({
       ...row,
