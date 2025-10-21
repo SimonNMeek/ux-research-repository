@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { withWorkspace, WorkspaceRouteHandler } from '../../../../../src/server/workspace-resolver';
 import { ProjectRepo } from '../../../../../src/server/repo/project';
 import { DocumentRepo } from '../../../../../src/server/repo/document';
-import { getDb } from '../../../../../db/index';
+import { getDbAdapter, getDbType } from '../../../../../db/adapter';
 
 export const runtime = 'nodejs';
 
@@ -151,21 +151,40 @@ const handler: WorkspaceRouteHandler = async (context, req) => {
     const duration = Date.now() - startTime;
 
     // Log search to database
-    const db = getDb();
-    db.prepare(`
-      INSERT INTO searches (workspace_id, project_ids, query, mode, metadata)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(
-      workspace.id,
-      JSON.stringify(projectIds),
-      q,
-      mode,
-      JSON.stringify({
-        duration_ms: duration,
-        scanned_count: results.length,
-        project_slugs: projectSlugs || null
-      })
-    );
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
+    
+    if (dbType === 'postgres') {
+      await adapter.query(`
+        INSERT INTO searches (workspace_id, project_ids, query, mode, metadata)
+        VALUES ($1, $2, $3, $4, $5)
+      `, [
+        workspace.id,
+        JSON.stringify(projectIds),
+        q,
+        mode,
+        JSON.stringify({
+          duration_ms: duration,
+          scanned_count: results.length,
+          project_slugs: projectSlugs || null
+        })
+      ]);
+    } else {
+      adapter.prepare(`
+        INSERT INTO searches (workspace_id, project_ids, query, mode, metadata)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(
+        workspace.id,
+        JSON.stringify(projectIds),
+        q,
+        mode,
+        JSON.stringify({
+          duration_ms: duration,
+          scanned_count: results.length,
+          project_slugs: projectSlugs || null
+        })
+      );
+    }
 
     return new Response(
       JSON.stringify({
