@@ -28,7 +28,7 @@ const handler: WorkspaceRouteHandler = async (context, req) => {
       const startTime = Date.now();
       
       // Get all projects in workspace
-      const allProjects = projectRepo.listByWorkspace(workspace.id);
+      const allProjects = await projectRepo.listByWorkspace(workspace.id);
       const projectIds = allProjects.map(p => p.id);
       
       if (projectIds.length === 0) {
@@ -116,7 +116,7 @@ const handler: WorkspaceRouteHandler = async (context, req) => {
       }
     } else {
       // Search all projects in workspace
-      const allProjects = projectRepo.listByWorkspace(workspace.id);
+      const allProjects = await projectRepo.listByWorkspace(workspace.id);
       projectIds = allProjects.map(p => p.id);
     }
 
