@@ -266,14 +266,23 @@ export class ProjectRepo {
   resolveSlugsToids(workspaceId: number, slugs: string[]): number[] {
     if (slugs.length === 0) return [];
     
-    const placeholders = slugs.map(() => '?').join(',');
-    const rows = this.getDbConnection()
-      .prepare(`
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
+    
+    if (dbType === 'postgres') {
+      const placeholders = slugs.map((_, i) => `$${i + 2}`).join(',');
+      const result = adapter.query(`
+        SELECT id FROM projects 
+        WHERE workspace_id = $1 AND slug IN (${placeholders})
+      `, [workspaceId, ...slugs]);
+      return result.rows.map(row => row.id);
+    } else {
+      const placeholders = slugs.map(() => '?').join(',');
+      const rows = adapter.prepare(`
         SELECT id FROM projects 
         WHERE workspace_id = ? AND slug IN (${placeholders})
-      `)
-      .all(workspaceId, ...slugs) as any[];
-    
-    return rows.map(row => row.id);
+      `).all(workspaceId, ...slugs) as any[];
+      return rows.map(row => row.id);
+    }
   }
 }
