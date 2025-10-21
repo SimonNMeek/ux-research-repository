@@ -138,15 +138,15 @@ const handler: WorkspaceRouteHandler = async (context, req) => {
       );
     }
 
-    // Perform search
-    let results;
-    if (mode === 'semantic') {
-      // For now, fallback to fulltext since we don't have embeddings yet
-      // TODO: Implement semantic search when embeddings are available
-      results = documentRepo.searchFullText(projectIds, q, { limit: 50 });
-    } else {
-      results = documentRepo.searchFullText(projectIds, q, { limit: 50 });
-    }
+           // Perform search
+           let results;
+           if (mode === 'semantic') {
+             // For now, fallback to fulltext since we don't have embeddings yet
+             // TODO: Implement semantic search when embeddings are available
+             results = await documentRepo.searchFullText(projectIds, q, { limit: 50 });
+           } else {
+             results = await documentRepo.searchFullText(projectIds, q, { limit: 50 });
+           }
 
     const duration = Date.now() - startTime;
 

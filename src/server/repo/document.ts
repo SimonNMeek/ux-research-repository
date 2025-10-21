@@ -136,15 +136,34 @@ export class DocumentRepo {
     }));
   }
 
-  searchFullText(projectIds: number[], query: string, options: { limit?: number } = {}): DocumentSearchResult[] {
+  async searchFullText(projectIds: number[], query: string, options: { limit?: number } = {}): Promise<DocumentSearchResult[]> {
     if (projectIds.length === 0) return [];
     
     const { limit = 50 } = options;
-    const placeholders = projectIds.map(() => '?').join(',');
+    const adapter = getDbAdapter();
+    const dbType = getDbType();
     
-    // Use FTS for full-text search
-    const rows = this.getDbConnection()
-      .prepare(`
+    let rows: any[];
+    if (dbType === 'postgres') {
+      // PostgreSQL full-text search
+      const placeholders = projectIds.map((_, i) => `$${i + 1}`).join(',');
+      const result = await adapter.query(`
+        SELECT 
+          d.*,
+          p.slug as project_slug,
+          ts_headline('english', d.body, plainto_tsquery('english', $${projectIds.length + 1}), 'MaxWords=32, MinWords=16') as snippet
+        FROM documents d
+        JOIN projects p ON d.project_id = p.id
+        WHERE d.project_id IN (${placeholders})
+          AND to_tsvector('english', d.title || ' ' || d.body) @@ plainto_tsquery('english', $${projectIds.length + 1})
+        ORDER BY ts_rank(to_tsvector('english', d.title || ' ' || d.body), plainto_tsquery('english', $${projectIds.length + 1})) DESC
+        LIMIT $${projectIds.length + 2}
+      `, [...projectIds, query, limit]);
+      rows = result.rows;
+    } else {
+      // SQLite FTS search
+      const placeholders = projectIds.map(() => '?').join(',');
+      rows = adapter.prepare(`
         SELECT 
           d.*,
           p.slug as project_slug,
@@ -156,8 +175,8 @@ export class DocumentRepo {
           AND documents_fts MATCH ?
         ORDER BY rank
         LIMIT ?
-      `)
-      .all(...projectIds, query, limit) as any[];
+      `).all(...projectIds, query, limit) as any[];
+    }
     
     return rows.map(row => ({
       ...row,
