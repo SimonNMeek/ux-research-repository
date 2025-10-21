@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, Search, Edit, Trash2, Mail, UserPlus } from 'lucide-react';
+import { Loader2, Plus, Search, Edit, Trash2, Mail, UserPlus, Link, Copy, Check } from 'lucide-react';
 
 interface User {
   id: number;
@@ -45,6 +45,9 @@ export default function OrganizationUsersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteLinkLoading, setInviteLinkLoading] = useState(false);
+  const [generatedInviteLink, setGeneratedInviteLink] = useState('');
+  const [linkCopied, setLinkCopied] = useState(false);
   const [inviteData, setInviteData] = useState({
     email: '',
     firstName: '',
@@ -98,6 +101,43 @@ export default function OrganizationUsersPage() {
       setError(err instanceof Error ? err.message : 'Failed to invite user');
     } finally {
       setInviteLoading(false);
+    }
+  };
+
+  const handleGenerateInviteLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInviteLinkLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/org/users/invite-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(inviteData),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to generate invite link');
+      }
+
+      const data = await response.json();
+      setGeneratedInviteLink(data.inviteLink);
+      setLinkCopied(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate invite link');
+    } finally {
+      setInviteLinkLoading(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedInviteLink);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy link:', err);
     }
   };
 
@@ -297,12 +337,87 @@ export default function OrganizationUsersPage() {
                         <Button
                           type="button"
                           variant="outline"
+                          onClick={handleGenerateInviteLink}
+                          disabled={inviteLinkLoading}
+                        >
+                          {inviteLinkLoading ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <Link className="mr-2 h-4 w-4" />
+                              Create Invite Link
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
                           onClick={() => setShowInviteForm(false)}
                         >
                           Cancel
                         </Button>
                       </div>
                     </form>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Generated Invite Link Display */}
+              {generatedInviteLink && (
+                <Card className="mb-4">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Link className="h-5 w-5" />
+                      Generated Invite Link
+                    </CardTitle>
+                    <CardDescription>
+                      Share this link with {inviteData.firstName} {inviteData.lastName} ({inviteData.email}) to join your organization
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex items-center space-x-2">
+                        <Input
+                          value={generatedInviteLink}
+                          readOnly
+                          className="flex-1 font-mono text-sm"
+                        />
+                        <Button
+                          onClick={handleCopyLink}
+                          variant="outline"
+                          size="sm"
+                        >
+                          {linkCopied ? (
+                            <>
+                              <Check className="mr-2 h-4 w-4 text-green-600" />
+                              Copied!
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="mr-2 h-4 w-4" />
+                              Copy
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        <p>• This link will expire in 7 days</p>
+                        <p>• The user can use this link to create an account and join your organization</p>
+                        <p>• You can share this link via email, Slack, or any other method</p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setGeneratedInviteLink('');
+                          setInviteData({ email: '', firstName: '', lastName: '', role: 'member' });
+                        }}
+                      >
+                        Generate Another Link
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               )}
