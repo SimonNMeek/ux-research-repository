@@ -52,3 +52,4 @@ Tools exposed:
 
 Sample usage (stdin/stdout MCP client required). The server prints no HTTP port; it speaks MCP over stdio.
 # AWS Recovery Test - Tue Oct 21 07:53:53 BST 2025
+# Testing Vercel deployment - Tue Oct 21 07:56:38 BST 2025
