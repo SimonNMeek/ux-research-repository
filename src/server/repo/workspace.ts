@@ -24,8 +24,7 @@ export class WorkspaceRepo {
       const result = await adapter.query('SELECT * FROM workspaces WHERE slug = $1', [slug]);
       row = result.rows[0];
     } else {
-      const db = this.getDbConnection();
-      row = db.prepare('SELECT * FROM workspaces WHERE slug = ?').get(slug);
+      row = adapter.prepare('SELECT * FROM workspaces WHERE slug = ?').get(slug);
     }
     
     if (!row) return null;
