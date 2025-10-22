@@ -35,11 +35,23 @@ interface OrganizationUsersResponse {
   currentUserRole: string;
 }
 
+interface PendingInvitation {
+  id: number;
+  email: string;
+  role: string;
+  status: string;
+  created_at: string;
+  expires_at: string;
+  invited_by_name: string;
+  invited_by_email: string;
+}
+
 export default function OrganizationUsersPage() {
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState<string>('');
+  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -57,6 +69,7 @@ export default function OrganizationUsersPage() {
 
   useEffect(() => {
     fetchOrganizationUsers();
+    fetchPendingInvitations();
   }, []);
 
   const fetchOrganizationUsers = async () => {
@@ -74,6 +87,24 @@ export default function OrganizationUsersPage() {
       setError(err instanceof Error ? err.message : 'Failed to load users');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPendingInvitations = async () => {
+    try {
+      const response = await fetch('/api/org/invitations');
+      if (!response.ok) {
+        if (response.status === 403) {
+          // User doesn't have admin access, that's fine
+          return;
+        }
+        throw new Error('Failed to fetch pending invitations');
+      }
+      const data = await response.json();
+      setPendingInvitations(data.invitations || []);
+    } catch (err) {
+      console.error('Failed to load pending invitations:', err);
+      // Don't set error state for this, as it's not critical
     }
   };
 
@@ -97,6 +128,7 @@ export default function OrganizationUsersPage() {
       setInviteData({ email: '', firstName: '', lastName: '', role: 'member' });
       setShowInviteForm(false);
       fetchOrganizationUsers(); // Refresh the list
+      fetchPendingInvitations(); // Refresh pending invitations
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to invite user');
     } finally {
@@ -417,6 +449,52 @@ export default function OrganizationUsersPage() {
                       >
                         Generate Another Link
                       </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Pending Invitations Section */}
+              {pendingInvitations.length > 0 && (currentUserRole === 'owner' || currentUserRole === 'admin') && (
+                <Card className="mb-4">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Mail className="h-5 w-5" />
+                      Pending Invitations ({pendingInvitations.length})
+                    </CardTitle>
+                    <CardDescription>
+                      Users who have been invited but haven't joined yet
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {pendingInvitations.map((invitation) => (
+                        <div key={invitation.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <div className="flex-shrink-0">
+                              <div className="h-8 w-8 rounded-full bg-orange-100 dark:bg-orange-900 flex items-center justify-center">
+                                <Mail className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                {invitation.email}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                Invited by {invitation.invited_by_name} • {new Date(invitation.created_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
+                              {invitation.role.charAt(0).toUpperCase() + invitation.role.slice(1)}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              Expires {new Date(invitation.expires_at).toLocaleDateString()}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </CardContent>
                 </Card>

@@ -183,7 +183,9 @@ export default function ProjectPage() {
     prevent(e);
     setDragActive(false);
     const droppedFiles = Array.from(e.dataTransfer.files || []);
-    const validFiles = droppedFiles.filter(f => f.name.endsWith('.txt') || f.name.endsWith('.md'));
+    const validFiles = droppedFiles.filter(f =>
+      f.name.endsWith('.txt') || f.name.endsWith('.md') || f.name.endsWith('.csv')
+    );
     if (validFiles.length > 0) {
       setUploadFiles(prev => [...prev, ...validFiles]);
     }
@@ -192,7 +194,12 @@ export default function ProjectPage() {
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const selectedFiles = Array.from(e.target.files).filter(file => 
-        file.type === 'text/plain' || file.name.endsWith('.md') || file.name.endsWith('.txt')
+        file.type === 'text/plain' ||
+        file.type === 'text/markdown' ||
+        file.type === 'text/csv' ||
+        file.name.endsWith('.md') ||
+        file.name.endsWith('.txt') ||
+        file.name.endsWith('.csv')
       );
       setUploadFiles(prev => [...prev, ...selectedFiles]);
     }
@@ -209,10 +216,13 @@ export default function ProjectPage() {
     try {
       for (const file of uploadFiles) {
         const content = await file.text();
+        const isCsv = file.name.toLowerCase().endsWith('.csv');
+        const markdownBody = isCsv ? csvToMarkdown(content) : content;
+        const uploadTitle = isCsv ? file.name.replace(/\.csv$/i, '.md') : file.name;
         
         const uploadData = {
-          title: file.name,
-          body: content,
+          title: uploadTitle,
+          body: markdownBody,
           tags: uploadTags.split(',').map(tag => tag.trim()).filter(Boolean),
           ...(anonymizationConfig && { 
             anonymize: true, 
@@ -492,6 +502,47 @@ export default function ProjectPage() {
       .trim();
   }, []);
 
+  // Minimal CSV -> Markdown converter (client-side, no dependencies)
+  const csvToMarkdown = (content: string): string => {
+    const lines = (content || '').split(/\r?\n/).filter(l => l.trim().length > 0);
+    if (lines.length === 0) return '';
+
+    const parseCsvLine = (line: string): string[] => {
+      const cells: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          // Handle escaped quotes "" inside a quoted cell
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (ch === ',' && !inQuotes) {
+          cells.push(current.trim());
+          current = '';
+        } else {
+          current += ch;
+        }
+      }
+      cells.push(current.trim());
+      return cells.map(c => c.replace(/\r/g, ''));
+    };
+
+    const rows = lines.map(parseCsvLine);
+    if (rows.length === 0) return '';
+
+    const header = rows[0];
+    const body = rows.slice(1);
+    const headerLine = `| ${header.join(' | ')} |`;
+    const sepLine = `| ${header.map(() => '---').join(' | ')} |`;
+    const bodyLines = body.map(r => `| ${r.join(' | ')} |`).join('\n');
+    return [headerLine, sepLine, bodyLines].filter(Boolean).join('\n');
+  };
+
   // Memoized safe tags to prevent hydration issues
   const safeAllTags = useMemo(() => {
     if (!Array.isArray(allTags)) return [];
@@ -597,6 +648,7 @@ export default function ProjectPage() {
             >
               <Upload className="w-8 h-8 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-600 mb-4">Drag a .txt/.md file here</p>
+              <p className="text-gray-500 text-sm mb-2">CSV supported. CSV will be converted to a Markdown table on upload.</p>
               <Button 
                 variant="outline" 
                 onClick={() => fileInputRef.current?.click()}
@@ -608,7 +660,7 @@ export default function ProjectPage() {
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept=".txt,.md"
+                accept=".txt,.md,.csv,text/csv"
                 onChange={handleFileSelect}
                 className="hidden"
               />

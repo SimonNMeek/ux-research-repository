@@ -115,6 +115,24 @@ This is an automated message from Sol Research. Please do not reply directly to 
 }
 
 export function generateSignupUrl(token: string, baseUrl?: string): string {
-  const base = baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  // Determine the base URL based on environment
+  let base: string;
+  
+  if (baseUrl) {
+    base = baseUrl;
+  } else if (process.env.NEXT_PUBLIC_APP_URL) {
+    base = process.env.NEXT_PUBLIC_APP_URL;
+  } else if (process.env.NODE_ENV === 'production') {
+    // Always use the main production domain for production invites
+    // This avoids Vercel's deployment protection on preview URLs
+    base = 'https://ux-repo-web.vercel.app';
+  } else if (process.env.VERCEL_URL) {
+    // Only use VERCEL_URL for non-production environments
+    base = `https://${process.env.VERCEL_URL}`;
+  } else {
+    // Development fallback
+    base = 'http://localhost:3000';
+  }
+  
   return `${base}/signup?invite=${token}`;
 }
