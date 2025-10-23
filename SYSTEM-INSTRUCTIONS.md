@@ -68,9 +68,10 @@ npm run test:health:both
 ## 🚀 **Deployment Process**
 1. Run `npm run test:health:both`
 2. Fix any failures
-3. Deploy to Vercel
-4. Run `npm run test:health:prod`
-5. Update `SYSTEM-HEALTH.md`
+3. **Merge to `main` branch** (Vercel deploys from `main`, not feature branches)
+4. Deploy to Vercel
+5. Run `npm run test:health:prod`
+6. Update `SYSTEM-HEALTH.md`
 
 ## 💡 **Context Management**
 - Always check `SYSTEM-HEALTH.md` first

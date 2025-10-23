@@ -177,7 +177,7 @@ export default function Header() {
     <header className="h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 flex items-center justify-between">
       {/* Left side - Logo placeholder */}
       <button 
-        onClick={() => router.push('/')}
+        onClick={() => router.push('/workspaces')}
         className="flex items-center hover:opacity-80 transition-opacity"
       >
         <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center relative">

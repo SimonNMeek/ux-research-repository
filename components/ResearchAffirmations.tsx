@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { Quote } from 'lucide-react';
 
 const researchQuotes = [
   {
@@ -74,42 +75,51 @@ interface Quote {
   author: string;
 }
 
-export default function ResearchAffirmations() {
+interface ResearchAffirmationsProps {
+  className?: string;
+  quoteClassName?: string;
+  authorClassName?: string;
+  iconClassName?: string;
+}
+
+export default function ResearchAffirmations({ 
+  className = "", 
+  quoteClassName = "",
+  authorClassName = "",
+  iconClassName = ""
+}: ResearchAffirmationsProps) {
   const [currentQuote, setCurrentQuote] = useState<Quote | null>(null);
 
   useEffect(() => {
     // Set random quote on component mount
     const randomIndex = Math.floor(Math.random() * researchQuotes.length);
     setCurrentQuote(researchQuotes[randomIndex]);
+
+    // Rotate quotes every 30 seconds
+    const interval = setInterval(() => {
+      const randomIndex = Math.floor(Math.random() * researchQuotes.length);
+      setCurrentQuote(researchQuotes[randomIndex]);
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
   }, []);
 
   return (
-    <div className="text-center py-16">
-      <div className="max-w-4xl mx-auto px-6">
-        {/* Main quote */}
-        {currentQuote && (
-          <blockquote className="text-4xl font-bold text-gray-800 dark:text-gray-200 leading-relaxed mb-6">
-            "{currentQuote.text}"
-          </blockquote>
-        )}
-        
-        {/* Author attribution */}
-        {currentQuote && currentQuote.author && (
-          <cite className="text-lg italic text-gray-600 dark:text-gray-400 mb-8 block">
-            — {currentQuote.author}
-          </cite>
-        )}
-        
-        {/* Subtitle */}
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-8">
-          Research insights that guide product excellence
-        </p>
-
-        {/* Additional small tagline */}
-        <div className="text-xs text-gray-500 dark:text-gray-500 uppercase tracking-wide">
-          Sol Research Platform
-        </div>
-      </div>
+    <div className={`text-center ${className}`}>
+      {/* Main quote */}
+      {currentQuote && (
+        <blockquote className={`relative mx-auto max-w-2xl italic ${quoteClassName || 'text-lg text-muted-foreground'}`}>
+          <Quote className={`absolute -left-6 top-0 h-5 w-5 ${iconClassName || 'text-muted'}`} />
+          "{currentQuote.text}"
+        </blockquote>
+      )}
+      
+      {/* Author attribution */}
+      {currentQuote && currentQuote.author && (
+        <cite className={`mt-4 block text-sm ${authorClassName || 'text-muted-foreground'}`}>
+          — {currentQuote.author}
+        </cite>
+      )}
     </div>
   );
 }

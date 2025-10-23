@@ -1,22 +1,38 @@
 # System Health Document
 
-**Last Updated:** 2025-10-21T14:36:09.292Z  
+**Last Updated:** 2025-10-23T08:32:03.969Z  
 **Updated By:** Claude (AI Assistant)  
-**Change Description:** Fixed manual invite link generation to use main production domain instead of preview URLs to avoid Vercel deployment protection
+**Change Description:** Implemented simple production homepage with environment-based switching and updated deployment instructions
 
 ## 🎯 **Current System Status**
 
 | Component | Status | Last Tested | Notes |
 |-----------|--------|-------------|-------|
-| **Authentication** | ✅ Working | 2025-10-21T14:23:35.862Z | Login/logout functional, proper 401 responses |
-| **Main App** | ✅ Working | 2025-10-21T14:23:35.862Z | Workspaces, projects, documents |
-| **Search & Favorites** | ✅ Working | 2025-10-21T14:23:35.862Z | Full-text search, favoriting, proper auth |
-| **Kanban Board** | ✅ Working | 2025-10-21T14:23:35.862Z | SuperAdmin-only, deployed |
-| **Organization Management** | ✅ Working | 2025-10-21T14:23:35.862Z | User invites, API keys, properly protected, production URLs, invitation limit cleared |
-| **Database** | ✅ Working | 2025-10-21T14:23:35.862Z | PostgreSQL connection stable |
-| **Deployment** | ✅ Working | 2025-10-21T14:23:35.862Z | Vercel deployment successful |
+| **Authentication** | ✅ Working | 2025-10-22T12:58:50.640Z | Login/logout functional, proper 401 responses |
+| **Main App** | ✅ Working | 2025-10-22T12:58:50.640Z | Workspaces, projects, documents, CSV upload support |
+| **Search & Favorites** | ✅ Working | 2025-10-22T12:58:50.640Z | Full-text search, favoriting, proper auth |
+| **Kanban Board** | ✅ Working | 2025-10-22T12:58:50.640Z | SuperAdmin-only, deployed |
+| **Organization Management** | ✅ Working | 2025-10-22T12:58:50.640Z | User invites, API keys, properly protected, production URLs, invitation limit cleared |
+| **Database** | ✅ Working | 2025-10-22T12:58:50.640Z | PostgreSQL connection stable |
+| **Deployment** | ✅ Working | 2025-10-22T12:58:50.640Z | Vercel deployment successful, CSV feature deployed |
 
 ## 🔧 **Recent Changes**
+
+### 2025-10-23 - Simple Production Homepage Implementation
+- **What changed:** Created simple dark homepage for production with Sol logo, rotating quotes (30s), and auth buttons. Added environment-based switching between full marketing homepage (dev) and simple homepage (prod). Updated deployment instructions to clarify Vercel deploys from `main` branch.
+- **Files modified:** `app/page.tsx`, `components/SimpleHomepage.tsx`, `components/ResearchAffirmations.tsx`, `SYSTEM-INSTRUCTIONS.md`, `.env.local`
+- **Risk level:** LOW (new feature addition, no breaking changes)
+- **Testing performed:** All 12 tests pass (100% success rate) - Local: 6/6, Production: 6/6
+- **Status:** SUCCESS
+- **Environment variable:** Added `NEXT_PUBLIC_SIMPLE_HOMEPAGE=true` to `.env.local` for local testing
+
+### 2025-10-22 - CSV Upload Feature Deployment
+- **What changed:** Added CSV upload support to project pages with client-side conversion to Markdown tables
+- **Files modified:** `app/w/[ws]/projects/[projectSlug]/page.tsx` (deployed to production)
+- **Risk level:** LOW (new feature addition)
+- **Testing performed:** All 12 tests pass (100% success rate) - Local: 6/6, Production: 6/6
+- **Status:** SUCCESS
+- **Deployment note:** Required manual promotion on Vercel (branch protection)
 
 ### 2025-10-21 - Vercel Deployment Protection Fix
 - **What changed:** Fixed manual invite link generation to use main production domain instead of preview URLs
@@ -65,7 +81,7 @@
 🗄️ Database Connectivity: ✅ PASSED
 
 Total: 6/6 tests passed (100%)
-Last Run: 2025-10-21T14:23:35.862Z
+Last Run: 2025-10-22T12:58:50.640Z
 ```
 
 ### Production (https://ux-repo-web.vercel.app)
@@ -78,7 +94,7 @@ Last Run: 2025-10-21T14:23:35.862Z
 🗄️ Database Connectivity: ✅ PASSED
 
 Total: 6/6 tests passed (100%)
-Last Run: 2025-10-21T14:10:20.638Z
+Last Run: 2025-10-22T12:58:50.640Z
 ```
 
 ## 🚨 **Known Issues**
