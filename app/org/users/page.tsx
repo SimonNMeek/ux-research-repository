@@ -244,10 +244,10 @@ export default function OrganizationUsersPage() {
       <Header />
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+          <h1 className="text-3xl font-bold text-foreground mb-2">
             Organization Users
           </h1>
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="text-muted-foreground">
             Manage users in {organization?.name || 'your organization'}
           </p>
         </div>
@@ -280,7 +280,7 @@ export default function OrganizationUsersPage() {
             <CardContent>
               <div className="flex items-center space-x-4 mb-4">
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="Search users..."
                     value={searchTerm}
@@ -469,7 +469,7 @@ export default function OrganizationUsersPage() {
                   <CardContent>
                     <div className="space-y-3">
                       {pendingInvitations.map((invitation) => (
-                        <div key={invitation.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div key={invitation.id} className="flex items-center justify-between p-3 border border-border/50 rounded-lg bg-card/50">
                           <div className="flex items-center space-x-3">
                             <div className="flex-shrink-0">
                               <div className="h-8 w-8 rounded-full bg-orange-100 dark:bg-orange-900 flex items-center justify-center">
@@ -477,10 +477,10 @@ export default function OrganizationUsersPage() {
                               </div>
                             </div>
                             <div>
-                              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                              <p className="text-sm font-medium text-card-foreground">
                                 {invitation.email}
                               </p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                              <p className="text-xs text-muted-foreground">
                                 Invited by {invitation.invited_by_name} • {new Date(invitation.created_at).toLocaleDateString()}
                               </p>
                             </div>
@@ -508,18 +508,18 @@ export default function OrganizationUsersPage() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4">
                           <div className="flex-shrink-0">
-                            <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                              <UserPlus className="h-5 w-5 text-gray-500" />
+                            <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center">
+                              <UserPlus className="h-5 w-5 text-muted-foreground" />
                             </div>
                           </div>
                           <div>
-                            <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                            <h3 className="text-lg font-medium text-card-foreground">
                               {user.name}
                             </h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                            <p className="text-sm text-muted-foreground">
                               {user.email}
                             </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-500">
+                            <p className="text-xs text-muted-foreground">
                               Joined {new Date(user.joined_at).toLocaleDateString()}
                             </p>
                           </div>
@@ -559,7 +559,7 @@ export default function OrganizationUsersPage() {
 
                 {filteredUsers.length === 0 && (
                   <div className="text-center py-8">
-                    <p className="text-gray-500 dark:text-gray-400">
+                    <p className="text-muted-foreground">
                       {searchTerm ? 'No users found matching your search.' : 'No users in your organization yet.'}
                     </p>
                   </div>

@@ -216,7 +216,7 @@ export default function WorkspacesPage() {
             <div className="h-8 bg-gray-200 rounded mb-6"></div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {[1, 2].map(i => (
-                <div key={i} className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                <div key={i} className="bg-card rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                   <div className="h-6 bg-gray-200 rounded mb-4"></div>
                   <div className="space-y-2">
                     <div className="h-4 bg-gray-200 rounded"></div>
@@ -289,7 +289,7 @@ export default function WorkspacesPage() {
 
         {/* Workspaces Grid */}
         {workspaces.length === 0 ? (
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
+          <div className="bg-card rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
             <FileBox className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No Workspaces Found</h3>
             <p className="text-gray-600 mb-4">
@@ -318,7 +318,7 @@ export default function WorkspacesPage() {
                   {groupWorkspaces.map(workspace => (
                     <div
                       key={workspace.slug}
-                      className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition-shadow cursor-pointer group"
+                      className="bg-card rounded-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition-shadow cursor-pointer group"
                       onClick={() => navigateToWorkspace(workspace.slug)}
                     >
                       <div className="flex items-start justify-between mb-4">

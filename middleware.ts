@@ -4,8 +4,8 @@ import type { NextRequest } from 'next/server';
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
-  // Protect workspace routes, workspaces page, and organization management
-  if (pathname.startsWith('/w/') || pathname === '/workspaces' || pathname.startsWith('/org/')) {
+  // Protect workspace routes, workspaces page, organization management, and analytics
+  if (pathname.startsWith('/w/') || pathname === '/workspaces' || pathname.startsWith('/org/') || pathname === '/analytics') {
     const session = request.cookies.get('session_id')?.value;
     if (!session) {
       const url = request.nextUrl.clone();
@@ -19,7 +19,7 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/w/:path*', '/workspaces', '/org/:path*'],
+  matcher: ['/w/:path*', '/workspaces', '/org/:path*', '/analytics'],
 };
 
 

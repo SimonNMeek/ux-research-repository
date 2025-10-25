@@ -1,6 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from 'react';
-import { User, Settings, CreditCard, LogOut, ChevronDown, Building2, Moon, Sun, Plus, Shield, Key } from 'lucide-react';
+import { User, Settings, CreditCard, LogOut, ChevronDown, Building2, Moon, Sun, Plus, Shield, Key, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useRouter, usePathname } from 'next/navigation';
 import { useDarkMode } from '@/hooks/useDarkMode';
@@ -174,16 +174,16 @@ export default function Header() {
   };
 
   return (
-    <header className="h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 flex items-center justify-between">
+    <header className="h-16 bg-slate-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 flex items-center justify-between">
       {/* Left side - Logo placeholder */}
       <button 
         onClick={() => router.push('/workspaces')}
         className="flex items-center hover:opacity-80 transition-opacity"
       >
-        <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center relative">
+        <div className="w-8 h-8 bg-secondary rounded-lg flex items-center justify-center relative">
           <div className="w-5 h-5 bg-yellow-400 rounded-full shadow-lg shadow-yellow-400/60"></div>
         </div>
-        <span className="ml-2 text-lg font-semibold text-gray-900 dark:text-gray-100">Sol</span>
+        <span className="ml-2 text-lg font-semibold text-foreground">Sol</span>
       </button>
 
       {/* Right side - Workspace selector and Avatar dropdown */}
@@ -196,18 +196,18 @@ export default function Header() {
             onClick={() => setWorkspaceDropdownOpen(!workspaceDropdownOpen)}
             className="flex items-center space-x-2 h-8 px-3 text-sm"
           >
-            <Building2 className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-            <span className="text-gray-700 dark:text-gray-300">
+            <Building2 className="w-4 h-4 text-muted-foreground" />
+            <span className="text-card-foreground">
               {currentWorkspace ? currentWorkspace.name : 'Workspaces'}
             </span>
-            <ChevronDown className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+            <ChevronDown className="w-4 h-4 text-muted-foreground" />
           </Button>
 
           {/* Workspace Dropdown */}
           {workspaceDropdownOpen && (
-            <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
-              <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
-                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Switch Workspace</p>
+            <div className="absolute right-0 mt-2 w-56 bg-card rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+              <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Switch Workspace</p>
               </div>
               
               {workspaces.length > 0 ? (
@@ -225,21 +225,21 @@ export default function Header() {
 
                     return Object.entries(groupedWorkspaces).map(([orgName, orgWorkspaces]) => (
                       <div key={orgName}>
-                        <div className="px-4 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-100 dark:border-gray-700">
+                        <div className="px-4 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide border-b border-gray-200 dark:border-gray-700">
                           {orgName}
                         </div>
                         {orgWorkspaces.map((workspace) => (
                           <button
                             key={workspace.slug}
                             onClick={() => handleWorkspaceChange(workspace)}
-                            className={`w-full text-left px-6 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center ${
-                              currentWorkspace?.slug === workspace.slug ? 'bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'
+                            className={`w-full text-left px-6 py-2 text-sm hover:bg-accent flex items-center ${
+                              currentWorkspace?.slug === workspace.slug ? 'bg-accent text-accent-foreground' : 'text-card-foreground'
                             }`}
                           >
-                            <Building2 className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
+                            <Building2 className="w-4 h-4 mr-3 text-muted-foreground" />
                             <div>
                               <div className="font-medium">{workspace.name}</div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400">/{workspace.slug}</div>
+                              <div className="text-xs text-muted-foreground">/{workspace.slug}</div>
                             </div>
                             {currentWorkspace?.slug === workspace.slug && (
                               <div className="ml-auto w-2 h-2 bg-blue-500 rounded-full"></div>
@@ -255,14 +255,14 @@ export default function Header() {
                     <button
                       key={workspace.slug}
                       onClick={() => handleWorkspaceChange(workspace)}
-                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center ${
-                        currentWorkspace?.slug === workspace.slug ? 'bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'
+                      className={`w-full text-left px-4 py-2 text-sm hover:bg-accent flex items-center ${
+                        currentWorkspace?.slug === workspace.slug ? 'bg-accent text-accent-foreground' : 'text-card-foreground'
                       }`}
                     >
-                      <Building2 className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
+                      <Building2 className="w-4 h-4 mr-3 text-muted-foreground" />
                       <div>
                         <div className="font-medium">{workspace.name}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">/{workspace.slug}</div>
+                        <div className="text-xs text-muted-foreground">/{workspace.slug}</div>
                       </div>
                       {currentWorkspace?.slug === workspace.slug && (
                         <div className="ml-auto w-2 h-2 bg-blue-500 rounded-full"></div>
@@ -271,10 +271,10 @@ export default function Header() {
                   ))
                 )
               ) : (
-                <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">Loading workspaces...</div>
+                <div className="px-4 py-2 text-sm text-muted-foreground">Loading workspaces...</div>
               )}
               
-              <div className="border-t border-gray-100 dark:border-gray-700 my-1"></div>
+              <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
               
               {/* Show Create Workspace only for users with appropriate permissions */}
               {canUserCreateWorkspace() && (
@@ -283,9 +283,9 @@ export default function Header() {
                     setWorkspaceDropdownOpen(false);
                     setCreateWorkspaceOpen(true);
                   }}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                  className="w-full text-left px-4 py-2 text-sm text-card-foreground hover:bg-accent flex items-center"
                 >
-                  <Plus className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
+                  <Plus className="w-4 h-4 mr-3 text-muted-foreground" />
                   Create Workspace
                 </button>
               )}
@@ -295,9 +295,9 @@ export default function Header() {
                   setWorkspaceDropdownOpen(false);
                   router.push('/workspaces');
                 }}
-                className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                className="w-full text-left px-4 py-2 text-sm text-card-foreground hover:bg-accent flex items-center"
               >
-                <Building2 className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
+                <Building2 className="w-4 h-4 mr-3 text-muted-foreground" />
                 All Workspaces
               </button>
             </div>
@@ -309,12 +309,12 @@ export default function Header() {
           variant="ghost"
           size="sm"
           onClick={toggleTheme}
-          className="h-8 px-2 hover:bg-gray-100 dark:hover:bg-gray-800"
+          className="h-8 px-2 hover:bg-accent"
         >
           {resolvedTheme === 'dark' ? (
-            <Sun className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+            <Sun className="w-4 h-4 text-foreground" />
           ) : (
-            <Moon className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+            <Moon className="w-4 h-4 text-foreground" />
           )}
         </Button>
 
@@ -324,9 +324,9 @@ export default function Header() {
           variant="ghost"
           size="sm"
           onClick={() => setDropdownOpen(!dropdownOpen)}
-          className="flex items-center space-x-2 h-8 px-2 hover:bg-gray-100"
+          className="flex items-center space-x-2 h-8 px-2 hover:bg-accent"
         >
-          <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
+          <div className="w-6 h-6 rounded-full overflow-hidden bg-secondary flex items-center justify-center">
             <img 
               src="https://i.pravatar.cc/150?img=1" 
               alt="Tony James" 
@@ -337,18 +337,18 @@ export default function Header() {
                 e.currentTarget.nextElementSibling.style.display = 'flex';
               }}
             />
-            <User className="w-4 h-4 text-gray-600 hidden" />
+            <User className="w-4 h-4 text-muted-foreground hidden" />
           </div>
-          <span className="text-sm text-gray-700 dark:text-gray-300">{user?.name || 'Loading...'}</span>
-          <ChevronDown className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+          <span className="text-sm text-card-foreground">{user?.name || 'Loading...'}</span>
+          <ChevronDown className="w-4 h-4 text-muted-foreground" />
         </Button>
 
         {/* Dropdown menu */}
         {dropdownOpen && (
-          <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
-            <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{user?.name || 'Loading...'}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{user?.email || 'Loading...'}</p>
+          <div className="absolute right-0 mt-2 w-48 bg-card rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+            <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+              <p className="text-sm font-medium text-card-foreground">{user?.name || 'Loading...'}</p>
+              <p className="text-xs text-muted-foreground">{user?.email || 'Loading...'}</p>
             </div>
             
             <button 
@@ -356,9 +356,9 @@ export default function Header() {
                 setDropdownOpen(false);
                 router.push('/profile');
               }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+              className="w-full text-left px-4 py-2 text-sm text-card-foreground hover:bg-accent flex items-center"
             >
-              <User className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
+              <User className="w-4 h-4 mr-3 text-muted-foreground" />
               Profile
             </button>
 
@@ -367,27 +367,27 @@ export default function Header() {
                 setDropdownOpen(false);
                 router.push('/profile/api-keys');
               }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+              className="w-full text-left px-4 py-2 text-sm text-card-foreground hover:bg-accent flex items-center"
             >
-              <CreditCard className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
+              <CreditCard className="w-4 h-4 mr-3 text-muted-foreground" />
               API Keys
             </button>
             
-            <button className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center">
-              <Settings className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
+            <button className="w-full text-left px-4 py-2 text-sm text-card-foreground hover:bg-accent flex items-center">
+              <Settings className="w-4 h-4 mr-3 text-muted-foreground" />
               Settings
             </button>
             
             {/* Organization Admin Section */}
-            <div className="border-t border-gray-100 dark:border-gray-700 my-1"></div>
+            <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
             <button 
               onClick={() => {
                 setDropdownOpen(false);
                 router.push('/org/users');
               }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+              className="w-full text-left px-4 py-2 text-sm text-card-foreground hover:bg-accent flex items-center"
             >
-              <User className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
+              <User className="w-4 h-4 mr-3 text-muted-foreground" />
               Organization Users
             </button>
             <button 
@@ -395,24 +395,44 @@ export default function Header() {
                 setDropdownOpen(false);
                 router.push('/org/api-keys');
               }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+              className="w-full text-left px-4 py-2 text-sm text-card-foreground hover:bg-accent flex items-center"
             >
-              <Key className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
+              <Key className="w-4 h-4 mr-3 text-muted-foreground" />
               API Keys
             </button>
             
             {/* Super Admin Section */}
             {(user?.system_role === 'super_admin') && (
               <>
-                <div className="border-t border-gray-100 dark:border-gray-700 my-1"></div>
+                <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
+                <button 
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    router.push('/analytics');
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-card-foreground hover:bg-accent flex items-center"
+                >
+                  <BarChart3 className="w-4 h-4 mr-3 text-muted-foreground" />
+                  Analytics Dashboard
+                </button>
+                <button 
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    router.push('/productbacklog');
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-card-foreground hover:bg-accent flex items-center"
+                >
+                  <Building2 className="w-4 h-4 mr-3 text-muted-foreground" />
+                  Kanban Board
+                </button>
                 <button 
                   onClick={() => {
                     setDropdownOpen(false);
                     router.push('/admin/users');
                   }}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                  className="w-full text-left px-4 py-2 text-sm text-card-foreground hover:bg-accent flex items-center"
                 >
-                  <Shield className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
+                  <Shield className="w-4 h-4 mr-3 text-muted-foreground" />
                   All Users
                 </button>
                 <button 
@@ -420,21 +440,21 @@ export default function Header() {
                     setDropdownOpen(false);
                     router.push('/admin/organizations');
                   }}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                  className="w-full text-left px-4 py-2 text-sm text-card-foreground hover:bg-accent flex items-center"
                 >
-                  <Building2 className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
+                  <Building2 className="w-4 h-4 mr-3 text-muted-foreground" />
                   All Organizations
                 </button>
               </>
             )}
             
-            <div className="border-t border-gray-100 dark:border-gray-700 my-1"></div>
+            <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
             
             <button 
               onClick={handleLogout}
-              className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center"
+              className="w-full text-left px-4 py-2 text-sm text-destructive hover:bg-destructive/10 flex items-center"
             >
-              <LogOut className="w-4 h-4 mr-3 text-red-500 dark:text-red-400" />
+              <LogOut className="w-4 h-4 mr-3 text-destructive" />
               Sign out
             </button>
           </div>

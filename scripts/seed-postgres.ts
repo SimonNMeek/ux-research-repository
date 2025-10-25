@@ -19,12 +19,12 @@ async function seedDatabase() {
     }
 
     // Create admin user
-    const adminPasswordHash = hashPassword('admin123');
+    const adminPasswordHash = hashPassword('Sol2024!SecureAdmin');
     const adminResult = await pool.query(`
       INSERT INTO users (email, name, first_name, last_name, password_hash, system_role, is_active)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING id
-    `, ['admin@sol.com', 'Admin User', 'Admin', 'User', adminPasswordHash, 'super_admin', true]);
+    `, ['admin@heysol.io', 'Sol Admin', 'Sol', 'Admin', adminPasswordHash, 'super_admin', true]);
 
     const adminId = adminResult.rows[0].id;
     console.log(`✅ Created admin user (ID: ${adminId})`);
@@ -34,7 +34,7 @@ async function seedDatabase() {
       INSERT INTO organizations (slug, name, billing_email, plan, max_workspaces, max_users, max_documents)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING id
-    `, ['sol-demo', 'SOL Demo Organization', 'admin@sol.com', 'free', 5, 10, 100]);
+    `, ['sol-demo', 'SOL Demo Organization', 'admin@heysol.io', 'free', 5, 10, 100]);
 
     const orgId = orgResult.rows[0].id;
     console.log(`✅ Created demo organization (ID: ${orgId})`);
@@ -105,9 +105,9 @@ async function seedDatabase() {
 
     console.log('🎉 Database seeded successfully!');
     console.log('\n📋 Demo Credentials:');
-    console.log('   Email: admin@sol.com');
-    console.log('   Password: admin123');
-    console.log('\n🌐 Access your app at: https://ux-repo-50ua8jcc9-simonnmeeks-projects.vercel.app');
+    console.log('   Email: admin@heysol.io');
+    console.log('   Password: Sol2024!SecureAdmin');
+    console.log('\n🌐 Access your app at: https://heysol.io');
 
   } catch (error) {
     console.error('❌ Error seeding database:', error);
