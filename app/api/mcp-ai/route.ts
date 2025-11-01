@@ -334,25 +334,31 @@ export async function POST(request: NextRequest) {
           const projQ = dbType === 'postgres' ? `SELECT slug FROM projects WHERE id = $1` : `SELECT slug FROM projects WHERE id = ?`;
           const projR = await db.query(projQ, [doc.project_id]);
           const proj = dbType === 'postgres' ? projR.rows[0] : projR[0];
-          return { tool: 'get_document', document: { id: doc.id, title: doc.title, body: doc.body || '', project_slug: proj?.slug } };
+          return { tool: 'get_document', document: { id: doc.id, title: doc.title, body: (doc.body || doc.clean_text || ''), project_slug: proj?.slug } };
         }
-        const tf = (args?.titleFragment || '').toLowerCase();
+        const tfRaw = (args?.titleFragment || '').toLowerCase();
+        const tf = tfRaw.trim();
+        const tfNorm = tf.replace(/[^a-z0-9]+/g, '');
         if (!tf) return { tool: 'get_document', document: undefined };
         const rows = await db.query(
           dbType === 'postgres'
-            ? `SELECT d.id, d.title, d.body, p.slug AS project_slug
+            ? `SELECT d.id, d.title, COALESCE(d.body, d.clean_text, '') AS body, p.slug AS project_slug
                FROM documents d INNER JOIN projects p ON d.project_id = p.id
-               WHERE p.workspace_id = $1 AND LOWER(d.title) LIKE $2
+               WHERE p.workspace_id = $1 AND (
+                 LOWER(d.title) LIKE $2 OR LOWER(regexp_replace(d.title, '[^a-z0-9]+', '', 'g')) LIKE $3
+               )
                ORDER BY d.created_at DESC LIMIT 1`
-            : `SELECT d.id, d.title, d.body, p.slug AS project_slug
+            : `SELECT d.id, d.title, COALESCE(d.body, d.clean_text, '') AS body, p.slug AS project_slug
                FROM documents d INNER JOIN projects p ON d.project_id = p.id
-               WHERE p.workspace_id = ? AND LOWER(d.title) LIKE ?
+               WHERE p.workspace_id = ? AND (
+                 LOWER(d.title) LIKE ? OR LOWER(REPLACE(REPLACE(REPLACE(d.title, '_', ''), ' ', ''), '.', '')) LIKE ?
+               )
                ORDER BY d.created_at DESC LIMIT 1`,
-          [ctx.workspaceId, `%${tf}%`]
+          dbType === 'postgres' ? [ctx.workspaceId, `%${tf}%`, `%${tfNorm}%`] : [ctx.workspaceId, `%${tf}%`, `%${tfNorm}%`]
         );
         const row = (dbType === 'postgres' ? rows.rows[0] : rows[0]) as any;
         if (!row) return { tool: 'get_document', document: undefined };
-        return { tool: 'get_document', document: { id: row.id, title: row.title, body: row.body || '', project_slug: row.project_slug } };
+        return { tool: 'get_document', document: { id: row.id, title: row.title, body: (row.body || ''), project_slug: row.project_slug } };
       },
       async search_documents(args: { q: string }, ctx: ToolContext): Promise<ToolResult> {
         const q = (args?.q || '').trim();
