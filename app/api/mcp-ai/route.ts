@@ -430,6 +430,7 @@ export async function POST(request: NextRequest) {
     // ----- Intent detection helpers -----
     const wantsFullList = /\b(full list|list all|show all|all of them|give me all|entire list)\b/i.test(message);
     const wantsSummarize = /(summari[sz]e|sum up|read|open|explain)\b/i.test(message);
+    const wantsSummarizeAll = /(summari[sz]e\s+(them|all)|summari[sz]e\s+them\s+all|another\s+couple|more\s+of\s+those|the\s+other\s+interviews)/i.test(message);
     const wantsList = /(what\s+documents|which\s+documents|list\s+documents|show\s+documents|list\s+docs|show\s+docs)/i.test(message);
     const wantsProjects = /(what\s+projects|which\s+projects|list\s+projects|show\s+projects)/i.test(message);
     const wantsSearch = /\b(search|find|look\s+for)\b/i.test(message);
@@ -446,6 +447,79 @@ export async function POST(request: NextRequest) {
 
     // If the user asked for a full list and we have documents, reply with all titles (no truncation)
     let aiResponse: string;
+    // Multi-doc: list and summarise matching interviews in a project
+    if (wantsSummarize && wantsSummarizeAll) {
+      // Build a candidate title phrase from the message, default to 'checkout interview'
+      const lower = messageLower;
+      const keywordMatch = lower.match(/(checkout|payment|interview|interviews|checkout\s*interview)/g);
+      const q = keywordMatch ? Array.from(new Set(keywordMatch)).join(' ') : 'checkout interview';
+
+      let candidates: Array<{ id: number; title: string; project_slug?: string }> = [];
+      if (matchedProjectSlugs.length > 0) {
+        // Limit to the matched project
+        const project = allProjects.find(p => p.slug === matchedProjectSlugs[0]);
+        if (project) {
+          const rows = await db.query(
+            dbType === 'postgres'
+              ? `SELECT d.id, d.title FROM documents d WHERE d.project_id = $1 AND (LOWER(d.title) LIKE $2 OR LOWER(d.title) LIKE $3) ORDER BY d.created_at ASC LIMIT 10`
+              : `SELECT d.id, d.title FROM documents d WHERE d.project_id = ? AND (LOWER(d.title) LIKE ? OR LOWER(d.title) LIKE ?) ORDER BY d.created_at ASC LIMIT 10`,
+            dbType === 'postgres' ? [project.id, '%checkout%', '%interview%'] : [project.id, '%checkout%', '%interview%']
+          );
+          const list = (dbType === 'postgres' ? rows.rows : rows) as any[];
+          candidates = list.map(r => ({ id: r.id, title: r.title, project_slug: project.slug }));
+        }
+      }
+      if (candidates.length === 0) {
+        // Fallback to workspace search
+        const toolRes = await toolRouter.search_documents({ q }, { workspaceId, workspaceSlug });
+        candidates = toolRes.documents.slice(0, 10);
+      }
+
+      if (candidates.length === 0) {
+        return NextResponse.json({
+          response: `I couldn't find additional interviews matching that description.`,
+          sources: [],
+          context: contextInfo,
+        });
+      }
+
+      // Summarise each (cap at 5 to control tokens)
+      const toSummarise = candidates.slice(0, 5);
+      const summaries: string[] = [];
+      const outSources: Array<{ id: number; title: string; project: string }> = [];
+      for (const c of toSummarise) {
+        try {
+          const doc = await documentRepo.getById(c.id, workspaceId);
+          if (!doc) continue;
+          const projQ = dbType === 'postgres' ? `SELECT slug,name FROM projects WHERE id = $1` : `SELECT slug,name FROM projects WHERE id = ?`;
+          const projR = await db.query(projQ, [doc.project_id]);
+          const proj = dbType === 'postgres' ? projR.rows[0] : projR[0];
+          const header = `Workspace: ${workspaceSlug}\nProject: ${proj?.slug || 'unknown'}`;
+          const body = doc.body || doc.clean_text || '';
+          if (!body.trim()) continue;
+          const summaryPrompt = `Summarise this interview accurately. Capture goals, pain points, and quotes. Cite the title.\nTitle: ${doc.title}\n\n${body.substring(0, 6000)}`;
+          const summary = await callOpenAI([{ role: 'user', content: `${header}\n\n${summaryPrompt}` }], header, workspaceSlug);
+          summaries.push(`- ${doc.title}:\n${summary}`);
+          outSources.push({ id: doc.id, title: doc.title, project: proj?.slug || 'unknown' });
+        } catch (e) {
+          // Skip individual failures, continue others
+        }
+      }
+
+      if (summaries.length === 0) {
+        return NextResponse.json({
+          response: `I found ${candidates.length} matching documents but couldn't read their contents.`,
+          sources: candidates.map(d => ({ id: d.id, title: d.title, project: d.project_slug || 'unknown' })),
+          context: contextInfo,
+        });
+      }
+
+      return NextResponse.json({
+        response: `Here are the summaries (${summaries.length}${candidates.length > summaries.length ? ` of ${candidates.length}` : ''}):\n\n${summaries.join('\n\n')}`,
+        sources: outSources,
+        context: contextInfo,
+      });
+    }
     // If user asked for a specific document to summarise/read, try to resolve it now using last sources
     if (wantsSummarize) {
       // Look for previous assistant message sources (from conversationHistory)
