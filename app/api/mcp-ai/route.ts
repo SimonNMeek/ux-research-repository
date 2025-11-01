@@ -522,6 +522,34 @@ export async function POST(request: NextRequest) {
             }
           }
         }
+        // Fallback: look up by title fragment across the workspace via tool
+        const toolDoc = await toolRouter.get_document({ titleFragment }, { workspaceId, workspaceSlug });
+        if (toolDoc && toolDoc.tool === 'get_document' && toolDoc.document) {
+          const d = toolDoc.document;
+          const projQ = dbType === 'postgres' ? `SELECT slug,name FROM projects WHERE id = $1` : `SELECT slug,name FROM projects WHERE id = ?`;
+          const projR = await db.query(projQ, [ (await documentRepo.getById(d.id, workspaceId))?.project_id ]);
+          const proj = dbType === 'postgres' ? projR.rows[0] : projR[0];
+          const header = `Workspace: ${workspaceSlug}\nProject: ${proj?.slug || 'unknown'}`;
+          const body = d.body || '';
+          const summaryPrompt = `Summarise this document accurately. Cite the title.\nTitle: ${d.title}\n\n${body.substring(0, 6000)}`;
+          try {
+            const summary = await callOpenAI([
+              { role: 'user', content: `${header}\n\n${summaryPrompt}` }
+            ], header, workspaceSlug);
+            return NextResponse.json({
+              response: summary,
+              sources: [{ id: d.id, title: d.title, project: proj?.slug || 'unknown' }],
+              context: `${header}\n\nRead: ${d.title}`,
+            });
+          } catch {
+            const fallback = `Summary of ${d.title}:\n${body.substring(0, 1000)}${body.length > 1000 ? '...' : ''}`;
+            return NextResponse.json({
+              response: fallback,
+              sources: [{ id: d.id, title: d.title, project: proj?.slug || 'unknown' }],
+              context: `${header}\n\nRead: ${d.title}`,
+            });
+          }
+        }
       }
     }
 
