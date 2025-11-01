@@ -213,6 +213,9 @@ export default function DevSelfCheckPage() {
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
             If the Next CSS still 404s: stop dev server, delete <code>.next</code>, then restart. If needed, reinstall dependencies.
           </p>
+          <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2 font-medium">
+            ⚠️ Database check: Run <code>npm run test:health</code> to verify DATABASE_URL is set. If empty, restore with: <code>vercel env pull .env.local</code>
+          </p>
         </div>
       </div>
     </div>

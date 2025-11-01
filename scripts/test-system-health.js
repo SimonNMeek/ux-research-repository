@@ -228,6 +228,37 @@ async function testOrgManagement(env) {
 }
 
 /**
+ * Test database configuration
+ */
+async function testDatabaseConfig() {
+  console.log(`\n🗄️ Checking Database Configuration...`);
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const envPath = path.join(process.cwd(), '.env.local');
+    
+    if (!fs.existsSync(envPath)) {
+      console.log(`⚠️  .env.local not found - using defaults`);
+      return;
+    }
+    
+    const envContent = fs.readFileSync(envPath, 'utf8');
+    const hasDatabaseUrl = envContent.match(/^DATABASE_URL=(.+)$/m);
+    
+    if (hasDatabaseUrl && hasDatabaseUrl[1].trim()) {
+      console.log(`✅ DATABASE_URL is set (PostgreSQL mode)`);
+      console.log(`   Connection string length: ${hasDatabaseUrl[1].trim().length} chars`);
+    } else {
+      console.log(`⚠️  DATABASE_URL is empty/not set (SQLite mode)`);
+      console.log(`   This means you're using local SQLite, not production data`);
+      console.log(`   To restore: vercel env pull .env.local --environment=development`);
+    }
+  } catch (error) {
+    console.log(`❌ Could not check database config: ${error.message}`);
+  }
+}
+
+/**
  * Test database connectivity
  */
 async function testDatabase(env) {
@@ -304,6 +335,11 @@ async function runAllTests() {
   console.log('🔍 System Health Test Suite');
   console.log('============================');
   console.log(`Testing at: ${new Date().toISOString()}`);
+  
+  // Check database configuration first (only for local)
+  if (!process.argv.includes('--prod')) {
+    await testDatabaseConfig();
+  }
   
   const environments = process.argv.includes('--prod') ? 
     [TESTS.production] : 
