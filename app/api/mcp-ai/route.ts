@@ -464,20 +464,19 @@ export async function POST(request: NextRequest) {
               ? `SELECT d.id, d.title
                  FROM documents d
                  WHERE d.project_id = $1 AND (
-                   (LOWER(d.title) LIKE $2 AND LOWER(d.title) LIKE $3)
-                   OR LOWER(regexp_replace(d.title, '[^a-z0-9]+', '', 'g')) LIKE $4
+                   LOWER(regexp_replace(d.title, '[^a-z0-9]+', '', 'g')) LIKE 'checkoutinterview%'
+                   OR LOWER(d.title) ~ 'checkout[_ ]?interview[0-9]*'
                  )
                  ORDER BY d.created_at ASC LIMIT 10`
               : `SELECT d.id, d.title
                  FROM documents d
                  WHERE d.project_id = ? AND (
-                   (LOWER(d.title) LIKE ? AND LOWER(d.title) LIKE ?)
-                   OR LOWER(REPLACE(REPLACE(REPLACE(d.title, '_', ''), ' ', ''), '.', '')) LIKE ?
+                   LOWER(REPLACE(REPLACE(REPLACE(d.title, '_', ''), ' ', ''), '.', '')) LIKE 'checkoutinterview%'
+                   OR LOWER(d.title) LIKE 'checkout_interview%'
+                   OR LOWER(d.title) LIKE 'checkout interview%'
                  )
                  ORDER BY d.created_at ASC LIMIT 10`,
-            dbType === 'postgres'
-              ? [project.id, '%checkout%', '%interview%', '%checkoutinterview%']
-              : [project.id, '%checkout%', '%interview%', '%checkoutinterview%']
+            [project.id]
           );
           const list = (dbType === 'postgres' ? rows.rows : rows) as any[];
           candidates = list.map(r => ({ id: r.id, title: r.title, project_slug: project.slug }));
@@ -486,11 +485,11 @@ export async function POST(request: NextRequest) {
       if (candidates.length === 0) {
         // Fallback to workspace search
         const toolRes = await toolRouter.search_documents({ q: 'checkout interview' }, { workspaceId, workspaceSlug });
-        // Filter to titles that include both tokens after normalization
+        // Filter to titles that look like checkout_interview*
         const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
         candidates = toolRes.documents.filter(d => {
           const t = norm(d.title || '');
-          return t.includes('checkout') && t.includes('interview');
+          return t.startsWith('checkoutinterview');
         }).slice(0, 10);
       }
 
