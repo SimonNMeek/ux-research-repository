@@ -53,6 +53,28 @@ export async function POST(req: NextRequest) {
               },
             },
             {
+              name: 'list_documents',
+              description: 'List documents in a workspace, optionally filtered by project. Use this when user asks to "list documents" or "show documents in [project name]".',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  workspace_slug: {
+                    type: 'string',
+                    description: 'Workspace slug',
+                  },
+                  project_slug: {
+                    type: 'string',
+                    description: 'Project slug (optional, to filter documents by project)',
+                  },
+                  limit: {
+                    type: 'number',
+                    description: 'Maximum number of documents to return (optional, default 20)',
+                  },
+                },
+                required: ['workspace_slug'],
+              },
+            },
+            {
               name: 'search',
               description: 'Search across documents and projects',
               inputSchema: {
@@ -208,8 +230,8 @@ export async function POST(req: NextRequest) {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            action: name,
-            ...args,
+            tool_name: name,
+            parameters: args,
           }),
         });
 

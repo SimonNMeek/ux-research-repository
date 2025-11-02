@@ -115,15 +115,20 @@ Ready to dive in? Let me know your role and what you'd like to achieve!`,
         break;
       
       case 'list_documents':
-        if (!parameters.workspace_slug || !parameters.project_slug) {
+        if (!parameters.workspace_slug) {
           return NextResponse.json(
-            { error: 'workspace_slug and project_slug parameters required' },
+            { error: 'workspace_slug parameter required' },
             { status: 400 }
           );
         }
         mcpEndpoint = '/api/mcp/documents';
         queryParams.set('workspace', parameters.workspace_slug);
-        queryParams.set('project', parameters.project_slug);
+        if (parameters.project_slug) {
+          queryParams.set('project', parameters.project_slug);
+        }
+        if (parameters.limit) {
+          queryParams.set('limit', parameters.limit.toString());
+        }
         break;
       
       case 'search':
