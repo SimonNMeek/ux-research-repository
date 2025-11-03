@@ -18,6 +18,15 @@ const handler = async (context: McpContext, request: NextRequest) => {
   const projectSlug = url.searchParams.get('project');
   const limit = parseInt(url.searchParams.get('limit') || '20');
 
+  console.log('Search request:', { 
+    workspace: workspace.slug, 
+    query, 
+    projectSlug, 
+    limit,
+    userId: user.id,
+    dbType: getDbType()
+  });
+
   await trackMcpUsage(user, '/api/mcp/search', workspace.id);
 
   const adapter = getDbAdapter();
@@ -113,7 +122,12 @@ const handler = async (context: McpContext, request: NextRequest) => {
     });
   } catch (error: any) {
     console.error('Error searching documents:', error);
-    return NextResponse.json({ error: 'Search failed' }, { status: 500 });
+    // Return more detailed error for debugging
+    return NextResponse.json({ 
+      error: 'Search failed',
+      message: error.message || 'Unknown error',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    }, { status: 500 });
   }
 };
 
