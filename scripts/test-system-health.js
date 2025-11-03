@@ -259,6 +259,97 @@ async function testDatabaseConfig() {
 }
 
 /**
+ * Check AI Assistant configuration
+ */
+async function testAIAssistantConfig() {
+  console.log(`\n🤖 Checking AI Assistant Configuration...`);
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const envPath = path.join(process.cwd(), '.env.local');
+    
+    if (!fs.existsSync(envPath)) {
+      console.log(`⚠️  .env.local not found - cannot check AI config`);
+      return;
+    }
+    
+    const envContent = fs.readFileSync(envPath, 'utf8');
+    const hasOpenAIKey = envContent.match(/^OPENAI_API_KEY=(.+)$/m);
+    const hasMcpKey = envContent.match(/^MCP_API_KEY=(.+)$/m);
+    
+    if (hasOpenAIKey && hasOpenAIKey[1].trim() && hasOpenAIKey[1].trim() !== 'your-openai-api-key-here') {
+      console.log(`✅ OPENAI_API_KEY is configured`);
+    } else {
+      console.log(`⚠️  OPENAI_API_KEY is missing or placeholder`);
+      console.log(`   AI Assistant requires OPENAI_API_KEY for orchestration`);
+    }
+    
+    if (hasMcpKey && hasMcpKey[1].trim() && hasMcpKey[1].trim() !== 'your-mcp-api-key-here') {
+      console.log(`✅ MCP_API_KEY is configured`);
+    } else {
+      console.log(`⚠️  MCP_API_KEY is missing or placeholder`);
+      console.log(`   AI Assistant requires MCP_API_KEY for tool authentication`);
+    }
+  } catch (error) {
+    console.log(`❌ Could not check AI config: ${error.message}`);
+  }
+}
+
+/**
+ * Test AI Assistant functionality
+ */
+async function testAIAssistant(env) {
+  console.log(`\n🤖 Testing AI Assistant (${env.name})...`);
+  
+  try {
+    // Test agent endpoint exists (should return 400/401, not 404)
+    const agentResponse = await makeRequest(`${env.url}/api/agent-mcp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: 'test',
+        workspaceSlug: 'test-workspace'
+      })
+    });
+    
+    // Should return 400 (missing required fields) or 401 (auth required), not 404 or 500
+    if (agentResponse.status === 404) {
+      throw new Error(`AI Assistant endpoint not found (404)`);
+    }
+    if (agentResponse.status >= 500) {
+      throw new Error(`AI Assistant endpoint error: ${agentResponse.status}`);
+    }
+    
+    // Check MCP endpoint
+    const mcpResponse = await makeRequest(`${env.url}/api/mcp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer test-key'
+      },
+      body: JSON.stringify({
+        method: 'tools/list',
+        id: 1,
+        jsonrpc: '2.0'
+      })
+    });
+    
+    // Should return 401 (unauthorized) or 400 (invalid), not 404
+    if (mcpResponse.status === 404) {
+      throw new Error(`MCP endpoint not found (404)`);
+    }
+    
+    console.log(`✅ AI Assistant endpoints accessible`);
+    return true;
+  } catch (error) {
+    console.log(`❌ AI Assistant test failed: ${error.message}`);
+    return false;
+  }
+}
+
+/**
  * Test database connectivity
  */
 async function testDatabase(env) {
@@ -300,7 +391,8 @@ async function runTestsForEnvironment(env) {
     testSearchAndFavorites,
     testKanban,
     testOrgManagement,
-    testDatabase
+    testDatabase,
+    testAIAssistant
   ];
   
   let envPassed = 0;
@@ -336,9 +428,10 @@ async function runAllTests() {
   console.log('============================');
   console.log(`Testing at: ${new Date().toISOString()}`);
   
-  // Check database configuration first (only for local)
+  // Check configuration first (only for local)
   if (!process.argv.includes('--prod')) {
     await testDatabaseConfig();
+    await testAIAssistantConfig();
   }
   
   const environments = process.argv.includes('--prod') ? 

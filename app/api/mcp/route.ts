@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
             },
             {
               name: 'list_documents',
-              description: 'List documents in a workspace, optionally filtered by project. Use this when user asks to "list documents" or "show documents in [project name]".',
+              description: 'List ALL documents in a workspace or project. Returns unfiltered list - you must filter results yourself if user asks for specific document types. Prefer "search" tool when user asks for specific document types like "interviews", "surveys", etc.',
               inputSchema: {
                 type: 'object',
                 properties: {
@@ -76,17 +76,21 @@ export async function POST(req: NextRequest) {
             },
             {
               name: 'search',
-              description: 'Search across documents and projects',
+              description: 'Search across documents and projects using full-text search. USE THIS when looking for specific document types (e.g., "interview", "survey"), topics, or filtering content. This is better than list_documents when you need to find specific types of documents.',
               inputSchema: {
                 type: 'object',
                 properties: {
                   query: {
                     type: 'string',
-                    description: 'Search query',
+                    description: 'Search query - use specific keywords like "interview", "survey", "checkout" to find relevant documents',
                   },
                   workspace_slug: {
                     type: 'string',
                     description: 'Workspace slug (optional)',
+                  },
+                  project_slug: {
+                    type: 'string',
+                    description: 'Project slug to limit search to a specific project (optional)',
                   },
                   limit: {
                     type: 'number',

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Search, Tag, ArrowUpDown, Upload, Heart, Trash2, Eye, Edit3, X, Plus } from 'lucide-react';
+import { Search, Tag, ArrowUpDown, Upload, Heart, Trash2, Eye, Edit3, X, Plus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,6 +11,7 @@ import ReactMarkdown from 'react-markdown';
 import Header from '@/components/Header';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import AnonymizeStep from '@/components/AnonymizeStep';
+import AIAssistant from '@/components/AIAssistant';
 
 interface Workspace {
   id: number;
@@ -77,6 +78,26 @@ export default function ProjectPage() {
   }>({ open: false, currentName: '', newName: '' });
   const [allTags, setAllTags] = useState<string[]>([]);
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
+
+  // AI Assistant state - load from localStorage
+  const [aiAssistantOpen, setAiAssistantOpen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const stored = localStorage.getItem(`ai-assistant-open-${workspaceSlug}`);
+      return stored === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  // Save assistant panel state to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(`ai-assistant-open-${workspaceSlug}`, aiAssistantOpen.toString());
+    } catch (e) {
+      console.error('Failed to save assistant panel state:', e);
+    }
+  }, [aiAssistantOpen, workspaceSlug]);
 
   // Safety checks - ensure all state is properly initialized
   const safeDocuments = documents || [];
@@ -605,25 +626,39 @@ export default function ProjectPage() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-900">
       <Header />
-      <div className="max-w-6xl mx-auto p-6">
+      <div 
+        className="max-w-6xl mx-auto p-6 transition-all duration-200"
+        style={aiAssistantOpen ? { marginRight: 'var(--ai-panel-width, 384px)' } : {}}
+      >
         {/* Breadcrumbs */}
         <Breadcrumbs items={breadcrumbItems} />
 
         {/* Project Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-4xl font-bold">{project.name}</h1>
-            <button
-              onClick={() => setRenamingProject({ 
-                open: true, 
-                currentName: project.name, 
-                newName: project.name 
-              })}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Rename project"
-            >
-              <Edit3 className="w-5 h-5 text-gray-600" />
-            </button>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <h1 className="text-4xl font-bold">{project.name}</h1>
+              <button
+                onClick={() => setRenamingProject({ 
+                  open: true, 
+                  currentName: project.name, 
+                  newName: project.name 
+                })}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Rename project"
+              >
+                <Edit3 className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
+            {workspace && !aiAssistantOpen && (
+              <Button
+                onClick={() => setAiAssistantOpen(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                Ask about {workspace.name}
+              </Button>
+            )}
           </div>
           {project.description && (
             <p className="text-gray-600 mb-4">{project.description}</p>
@@ -1173,6 +1208,16 @@ export default function ProjectPage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* AI Assistant */}
+        {workspace && (
+          <AIAssistant
+            workspaceSlug={workspaceSlug}
+            workspaceName={workspace.name}
+            isOpen={aiAssistantOpen}
+            onClose={() => setAiAssistantOpen(false)}
+          />
+        )}
       </div>
     </div>
   );

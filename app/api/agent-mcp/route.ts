@@ -125,23 +125,36 @@ export async function POST(req: NextRequest) {
     // Add workspace context to the message
     const systemPrompt = `You are a helpful research assistant. The user is working in workspace: ${workspaceSlug}.
 
-IMPORTANT TOOL SELECTION RULES:
-- To LIST DOCUMENTS in a project: Use "list_documents" tool with project_slug parameter (first call "list_projects" to get the project slug if you only have the project name)
-- To SEARCH for specific content: Use "search" tool
-- When user asks "list documents in [Project Name]": 
-  1. If you know the project slug, use "list_documents" with project_slug
-  2. If you only have the project name, first call "list_projects" to find the slug, then call "list_documents" with that slug
+CRITICAL: Be SELECTIVE and ANALYTICAL. When the user asks for specific document types (e.g., "user interviews", "surveys", "checkout interviews"), you must:
+1. FIRST determine what document types match the query
+2. Use "search" tool with specific keywords to find matching documents, OR
+3. If using "list_documents", you MUST filter and analyze the results to only include documents that actually match the user's intent
+4. DO NOT include documents that don't match - be strict about relevance
+5. Analyze document titles carefully - "pNPS", "CSAT scores", "Features" are NOT interviews, even if they're in the same project
+
+TOOL SELECTION RULES:
+- For SPECIFIC document types (interviews, surveys, specific topics): Use "search" tool with relevant keywords
+- For listing ALL documents: Use "list_documents" - but then FILTER results based on user's question
+- When filtering: Analyze document titles - "interview" in title suggests interview, "survey" suggests survey, metrics/reports (pNPS, CSAT) are NOT interviews
 - Always include workspace_slug: "${workspaceSlug}" when calling tools that require it
 
-Example: If user says "list documents in SupaDupa User Research":
-1. Call "list_projects" to find project slug "supadupa-user-research"
-2. Call "list_documents" with project_slug: "supadupa-user-research"`;
+RESPONSE FORMAT:
+- Group similar documents together
+- Provide structured summaries with key details
+- Be concise but informative
+- If a document type doesn't match the query, exclude it even if it's in the project
+
+Example: If user asks "What user interviews do I have in User Research":
+1. Use "search" with query like "interview" and project_slug: "user-research" (or similar), OR
+2. Use "list_documents" then filter to only include documents with "interview" in the title/type
+3. DO NOT include surveys, pNPS, CSAT, or feature lists - only actual interviews`;
 
     const openai = new OpenAI({ apiKey: openaiApiKey });
     
     // Use OpenAI to decide which tools to call
+    // Using gpt-4o for better reasoning and selectivity (gpt-4o-mini is too permissive)
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: message }
@@ -152,7 +165,7 @@ Example: If user says "list documents in SupaDupa User Research":
       })),
       tool_choice: 'auto',
       temperature: 0.1,
-      max_tokens: 2000,
+      max_tokens: 3000,
     });
 
     const messageResp = completion.choices[0].message;
@@ -214,14 +227,14 @@ Example: If user says "list documents in SupaDupa User Research":
         
         // Get OpenAI's next move (might be another tool call or final response)
         const nextCompletion = await openai.chat.completions.create({
-          model: 'gpt-4o-mini',
+          model: 'gpt-4o',
           messages: conversationMessages,
           tools: functions.map(f => ({
             type: 'function' as const,
             function: f
           })),
           temperature: 0.1,
-          max_tokens: 2000,
+          max_tokens: 3000,
         });
         
         currentMessage = nextCompletion.choices[0].message;

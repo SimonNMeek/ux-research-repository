@@ -139,9 +139,12 @@ Ready to dive in? Let me know your role and what you'd like to achieve!`,
           );
         }
         mcpEndpoint = '/api/mcp/search';
-        queryParams.set('query', parameters.query);
+        queryParams.set('q', parameters.query); // Search endpoint expects 'q' parameter
         if (parameters.workspace_slug) {
           queryParams.set('workspace', parameters.workspace_slug);
+        }
+        if (parameters.project_slug) {
+          queryParams.set('project', parameters.project_slug);
         }
         if (parameters.limit) {
           queryParams.set('limit', parameters.limit.toString());

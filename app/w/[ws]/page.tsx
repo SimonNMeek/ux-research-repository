@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Plus, Heart, Search, FolderOpen, Calendar, Star, Filter, Eye, Loader2 } from 'lucide-react';
+import { Plus, Heart, Search, FolderOpen, Calendar, Star, Filter, Eye, Loader2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 // import { Textarea } from '@/components/ui/textarea';
 import Header from '@/components/Header';
 import Breadcrumbs from '@/components/Breadcrumbs';
+import AIAssistant from '@/components/AIAssistant';
 import ReactMarkdown from 'react-markdown';
 
 interface Workspace {
@@ -118,6 +119,26 @@ export default function WorkspaceDashboard() {
   const [viewingDocument, setViewingDocument] = useState<{ open: boolean; document: Document | null; loading: boolean }>({ 
     open: false, document: null, loading: false 
   });
+
+  // AI Assistant state - load from localStorage
+  const [aiAssistantOpen, setAiAssistantOpen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const stored = localStorage.getItem(`ai-assistant-open-${workspaceSlug}`);
+      return stored === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  // Save assistant panel state to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(`ai-assistant-open-${workspaceSlug}`, aiAssistantOpen.toString());
+    } catch (e) {
+      console.error('Failed to save assistant panel state:', e);
+    }
+  }, [aiAssistantOpen, workspaceSlug]);
 
   // Load user data
   useEffect(() => {
@@ -392,16 +413,32 @@ export default function WorkspaceDashboard() {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-gray-900">
         <Header />
-        <div className="max-w-6xl mx-auto p-6">
+        <div 
+          className="max-w-6xl mx-auto p-6 transition-all duration-200"
+          style={aiAssistantOpen ? { marginRight: 'var(--ai-panel-width, 384px)' } : {}}
+        >
           {/* Breadcrumbs */}
           <Breadcrumbs items={breadcrumbItems} />
 
           {/* Workspace Header */}
           <div className="mb-8">
-            <h1 className="text-4xl font-bold mb-2">{workspace.name}</h1>
-            <p className="text-gray-600">
-              {projects.length} {projects.length === 1 ? 'project' : 'projects'} • {favoriteDocuments.length} favourite documents
-            </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-4xl font-bold mb-2">{workspace.name}</h1>
+                <p className="text-gray-600">
+                  {projects.length} {projects.length === 1 ? 'project' : 'projects'} • {favoriteDocuments.length} favourite documents
+                </p>
+              </div>
+              {!aiAssistantOpen && (
+                <Button
+                  onClick={() => setAiAssistantOpen(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Ask about {workspace.name}
+                </Button>
+              )}
+            </div>
           </div>
 
         {/* Search Interface */}
@@ -808,6 +845,26 @@ export default function WorkspaceDashboard() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* AI Assistant */}
+        <AIAssistant
+          workspaceSlug={workspaceSlug}
+          workspaceName={workspace.name}
+          isOpen={aiAssistantOpen}
+          onClose={() => setAiAssistantOpen(false)}
+          onProjectCreated={async () => {
+            // Refresh projects list when a new project is created
+            try {
+              const projectsRes = await fetch(`/w/${workspaceSlug}/api/projects`);
+              if (projectsRes.ok) {
+                const projectsData = await projectsRes.json();
+                setProjects(projectsData.projects || []);
+              }
+            } catch (err) {
+              console.error('Failed to refresh projects:', err);
+            }
+          }}
+        />
       </div>
     </div>
   );
