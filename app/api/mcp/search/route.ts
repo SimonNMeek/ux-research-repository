@@ -30,7 +30,9 @@ const handler = async (context: McpContext, request: NextRequest) => {
       // No query - return recent documents
       if (dbType === 'postgres') {
         const result = await adapter.query(`
-          SELECT d.id, d.title, d.content_preview, d.created_at,
+          SELECT d.id, d.title, 
+                 LEFT(d.body, 200) as preview,
+                 d.created_at,
                  p.slug as project_slug, p.name as project_name
           FROM documents d
           INNER JOIN projects p ON d.project_id = p.id
@@ -43,7 +45,9 @@ const handler = async (context: McpContext, request: NextRequest) => {
       } else {
         const db = getDb();
         documents = db.prepare(`
-          SELECT d.id, d.title, d.content_preview, d.created_at,
+          SELECT d.id, d.title, 
+                 SUBSTR(d.body, 1, 200) as preview,
+                 d.created_at,
                  p.slug as project_slug, p.name as project_name
           FROM documents d
           INNER JOIN projects p ON d.project_id = p.id
@@ -58,15 +62,17 @@ const handler = async (context: McpContext, request: NextRequest) => {
       if (dbType === 'postgres') {
         // PostgreSQL full-text search
         const result = await adapter.query(`
-          SELECT d.id, d.title, d.content_preview, d.created_at,
+          SELECT d.id, d.title, 
+                 LEFT(d.body, 200) as preview,
+                 d.created_at,
                  p.slug as project_slug, p.name as project_name,
-                 ts_rank(to_tsvector('english', d.title || ' ' || COALESCE(d.content_preview, '')), plainto_tsquery('english', $1)) as rank
+                 ts_rank(to_tsvector('english', d.title || ' ' || COALESCE(d.body, '')), plainto_tsquery('english', $1)) as rank
           FROM documents d
           INNER JOIN projects p ON d.project_id = p.id
           WHERE p.workspace_id = $2
           ${projectSlug ? 'AND p.slug = $3' : ''}
           AND (
-            to_tsvector('english', d.title || ' ' || COALESCE(d.content_preview, '')) @@ plainto_tsquery('english', $1)
+            to_tsvector('english', d.title || ' ' || COALESCE(d.body, '')) @@ plainto_tsquery('english', $1)
             OR d.title ILIKE $${projectSlug ? '4' : '3'}
           )
           ORDER BY rank DESC, d.created_at DESC
@@ -77,16 +83,18 @@ const handler = async (context: McpContext, request: NextRequest) => {
         );
         documents = result.rows;
       } else {
-        // SQLite full-text search using LIKE (FTS5 would be better but requires setup)
+        // SQLite full-text search using LIKE
         const db = getDb();
         documents = db.prepare(`
-          SELECT d.id, d.title, d.content_preview, d.created_at,
+          SELECT d.id, d.title, 
+                 SUBSTR(d.body, 1, 200) as preview,
+                 d.created_at,
                  p.slug as project_slug, p.name as project_name
           FROM documents d
           INNER JOIN projects p ON d.project_id = p.id
           WHERE p.workspace_id = ?
           ${projectSlug ? 'AND p.slug = ?' : ''}
-          AND (d.title LIKE ? OR d.content_preview LIKE ?)
+          AND (d.title LIKE ? OR d.body LIKE ?)
           ORDER BY d.created_at DESC
           LIMIT ?
         `).all(

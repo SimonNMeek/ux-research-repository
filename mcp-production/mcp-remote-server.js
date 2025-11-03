@@ -100,7 +100,10 @@ app.post(['/', '/mcp'], async (req, res) => {
         result: {
           protocolVersion: '2025-06-18',
           capabilities: {
-            tools: { list: true, call: true }
+            tools: { list: true, call: true },
+            resources: { list: true, read: true },
+            prompts: { list: true, get: true },
+            logging: {}
           },
           serverInfo: {
             name: 'sol-research-remote-mcp',
@@ -371,17 +374,24 @@ app.get('/mcp', (req, res) => {
   }
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('MCP-Protocol-Version', '2025-06-18');
+  // Info endpoint - provides detailed server information
   res.json({
     mcp_version: '2025-06-18',
     server_name: 'sol-research-remote-mcp',
     server_title: 'Sol Research MCP',
     server_version: '1.0.0',
-    transport: 'streamable-http',
-    capabilities: ['tools', 'resources', 'prompts'],
-    auth_required: true,
+    transport: 'http', // Changed from streamable-http for consistency
+    capabilities: {
+      tools: { list: true, call: true },
+      resources: { list: true, read: true },
+      prompts: { list: true, get: true },
+      logging: {}
+    },
+    auth_required: true, // Top-level boolean for compatibility
     auth: {
       type: 'bearer',
-      description: 'Organization or user API key required'
+      required: true,
+      description: 'Organization or user API key required. Format: Bearer sk-...'
     }
   });
 });
@@ -409,19 +419,31 @@ app.get('/.well-known/mcp', (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
   }
   res.setHeader('Content-Type', 'application/json');
+  res.setHeader('MCP-Protocol-Version', '2025-06-18');
+  // This is the primary discovery endpoint for Remote MCP
+  // Claude Web uses this to discover and configure the connector
   res.json({
     mcp_version: '2025-06-18',
     transport: 'http',
-    endpoints: { http: '/', info: '/mcp' },
-    server: { name: 'sol-research-remote-mcp', title: 'Sol Research MCP', version: '1.0.0' },
+    endpoints: { 
+      http: '/', 
+      info: '/mcp' 
+    },
+    server: { 
+      name: 'sol-research-remote-mcp', 
+      title: 'Sol Research MCP', 
+      version: '1.0.0' 
+    },
     capabilities: { 
       tools: { list: true, call: true }, 
       resources: { list: true, read: true }, 
-      prompts: { list: true, get: true }
+      prompts: { list: true, get: true },
+      logging: {}
     },
     auth: {
       type: 'bearer',
-      description: 'Organization or user API key required'
+      required: true,
+      description: 'Organization or user API key required. Format: Bearer sk-...'
     }
   });
 });
