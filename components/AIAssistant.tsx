@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { X, Send, Sparkles, User, FileText, Loader2, Copy, Check, GripVertical, Trash2, Bookmark } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -637,7 +638,13 @@ export default function AIAssistant({ workspaceSlug, workspaceName, isOpen, onCl
                       ? 'bg-blue-600 text-white border-blue-600' 
                       : 'bg-gray-50 dark:bg-gray-800'
                   }`}>
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    {message.role === 'assistant' ? (
+                      <div className="prose prose-sm dark:prose-invert max-w-none">
+                        <ReactMarkdown>{message.content}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    )}
                   </Card>
                   
                   {message.role === 'assistant' && (
@@ -951,7 +958,13 @@ export default function AIAssistant({ workspaceSlug, workspaceName, isOpen, onCl
                     ? 'bg-blue-600 text-white border-blue-600' 
                     : 'bg-gray-50 dark:bg-gray-800'
                 }`}>
-                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                {message.role === 'assistant' ? (
+                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                    <ReactMarkdown>{message.content}</ReactMarkdown>
+                  </div>
+                ) : (
+                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  )}
                 </Card>
                 
                 {message.role === 'assistant' && (
