@@ -92,3 +92,17 @@ lib-cov
 # Temp
 .tmp/
 temp/
+node_modules/
+.next/
+.out/
+dist/
+build/
+.vercel/
+.turbo/
+coverage/
+*.log
+.env.local
+*.sqlite
+*.db
+.next.to-delete.*/
+node_modules.to-delete.*/
