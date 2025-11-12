@@ -4,6 +4,13 @@
  */
 
 import { Pool, PoolClient, QueryResult } from 'pg';
+import { AsyncLocalStorage } from 'async_hooks';
+
+type QueryStore = {
+  client: PoolClient;
+};
+
+const queryStore = new AsyncLocalStorage<QueryStore>();
 
 let pool: Pool | null = null;
 
@@ -103,6 +110,11 @@ export async function query<T = any>(
   params?: any[],
   retries: number = 3
 ): Promise<QueryResult<T>> {
+  const store = queryStore.getStore();
+  if (store?.client) {
+    return store.client.query(text, params);
+  }
+
   const pool = getPostgresPool();
   
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -195,11 +207,17 @@ export async function getClient(): Promise<PoolClient> {
 export async function transaction<T>(
   callback: (client: PoolClient) => Promise<T>
 ): Promise<T> {
+  const store = queryStore.getStore();
+  if (store?.client) {
+    // Already inside a transaction scope; reuse current client
+    return callback(store.client);
+  }
+
   const client = await getClient();
   
   try {
     await client.query('BEGIN');
-    const result = await callback(client);
+    const result = await queryStore.run({ client }, async () => callback(client));
     await client.query('COMMIT');
     return result;
   } catch (error) {
@@ -226,6 +244,24 @@ export async function setCurrentOrganization(
   organizationId: number
 ): Promise<void> {
   await client.query("SELECT set_config('app.organization_id', $1::text, true)", [String(organizationId)]);
+}
+
+export interface RlsContext {
+  userId: number;
+  organizationId?: number | null;
+}
+
+export async function withRlsContext<T>(
+  context: RlsContext,
+  callback: () => Promise<T>
+): Promise<T> {
+  return transaction(async (client) => {
+    await setCurrentUser(client, context.userId);
+    if (context.organizationId !== undefined && context.organizationId !== null) {
+      await setCurrentOrganization(client, context.organizationId);
+    }
+    return callback();
+  });
 }
 
 /**

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { query } from '@/db/postgres';
+import { query, withRlsContext } from '@/db/postgres';
+import { getSessionCookie, validateSession } from '@/lib/auth';
 
 // Smart proxy that uses OpenAI to orchestrate MCP tools
 // Expects body: { message: string, workspaceSlug: string }
@@ -73,48 +74,50 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'message and workspaceSlug are required' }, { status: 400 });
     }
 
-    // Get workspace and organization
-    const workspaceResult = await query(
-      'SELECT id, slug, name, organization_id FROM workspaces WHERE slug = $1',
-      [workspaceSlug]
-    );
-    const workspace = workspaceResult.rows[0];
-    
-    if (!workspace) {
-      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    const sessionId = await getSessionCookie();
+    if (!sessionId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Use platform-wide OpenAI key for orchestration (deciding which MCP tools to call)
-    // This is separate from org-scoped MCP_API_KEY which authenticates tool calls
-    const openaiApiKey = process.env.OPENAI_API_KEY;
-    
-    if (!openaiApiKey) {
-      return NextResponse.json({ 
-        error: 'OPENAI_API_KEY not configured in environment. This is used for tool orchestration.' 
-      }, { status: 500 });
+    const user = await validateSession(sessionId);
+    if (!user) {
+      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
     }
 
-    // MCP_API_KEY should come from the request (org's API key from frontend)
-    // For now, fall back to env if not passed in request
-    // TODO: Frontend should pass org's MCP API key
-    const mcpApiKey = process.env.MCP_API_KEY;
-    
-    if (!mcpApiKey) {
-      return NextResponse.json({ error: 'MCP_API_KEY not configured' }, { status: 500 });
-    }
+    return await withRlsContext({ userId: user.id }, async () => {
+      const workspaceResult = await query(
+        'SELECT id, slug, name, organization_id FROM workspaces WHERE slug = $1',
+        [workspaceSlug]
+      );
+      const workspace = workspaceResult.rows[0];
+      
+      if (!workspace) {
+        return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+      }
 
-    // Get available MCP tools
-    const mcpTools = await getMCPTools(req, mcpApiKey);
-    
-    // Convert MCP tools to OpenAI function format
-    const functions = mcpTools.map((tool: any) => ({
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.inputSchema,
-    }));
+      const openaiApiKey = process.env.OPENAI_API_KEY;
+      
+      if (!openaiApiKey) {
+        return NextResponse.json({ 
+          error: 'OPENAI_API_KEY not configured in environment. This is used for tool orchestration.' 
+        }, { status: 500 });
+      }
 
-    // Add workspace context to the message
-    const systemPrompt = `You are a helpful research assistant. The user is working in workspace: ${workspaceSlug}.
+      const mcpApiKey = process.env.MCP_API_KEY;
+      
+      if (!mcpApiKey) {
+        return NextResponse.json({ error: 'MCP_API_KEY not configured' }, { status: 500 });
+      }
+
+      const mcpTools = await getMCPTools(req, mcpApiKey);
+      
+      const functions = mcpTools.map((tool: any) => ({
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.inputSchema,
+      }));
+
+      const systemPrompt = `You are a helpful research assistant. The user is working in workspace: ${workspaceSlug}.
 
 CRITICAL: Be SELECTIVE and ANALYTICAL. When the user asks for specific document types (e.g., "user interviews", "surveys", "checkout interviews"), you must:
 1. FIRST determine what document types match the query
@@ -140,119 +143,106 @@ Example: If user asks "What user interviews do I have in User Research":
 2. Use "list_documents" then filter to only include documents with "interview" in the title/type
 3. DO NOT include surveys, pNPS, CSAT, or feature lists - only actual interviews`;
 
-    const openai = new OpenAI({ apiKey: openaiApiKey });
-    
-    // Use OpenAI to decide which tools to call
-    // Using gpt-4o for better reasoning and selectivity (gpt-4o-mini is too permissive)
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
+      const openai = new OpenAI({ apiKey: openaiApiKey });
+      
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: message }
+        ],
+        tools: functions.map(f => ({
+          type: 'function' as const,
+          function: f
+        })),
+        tool_choice: 'auto',
+        temperature: 0.1,
+        max_tokens: 3000,
+      });
+
+      const messageResp = completion.choices[0].message;
+      let finalResponse = '';
+      
+      const conversationMessages: any[] = [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: message }
-      ],
-      tools: functions.map(f => ({
-        type: 'function' as const,
-        function: f
-      })),
-      tool_choice: 'auto',
-      temperature: 0.1,
-      max_tokens: 3000,
-    });
+        { role: 'user', content: message },
+      ];
 
-    const messageResp = completion.choices[0].message;
-    let finalResponse = '';
-    
-    // Build conversation history for sequential tool calls
-    const conversationMessages: any[] = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: message },
-    ];
+      let currentMessage = messageResp;
+      let maxIterations = 5;
+      let iteration = 0;
 
-    // Handle sequential tool calls - loop until we get a final text response
-    let currentMessage = messageResp;
-    let maxIterations = 5; // Prevent infinite loops
-    let iteration = 0;
-
-    while (iteration < maxIterations) {
-      if (currentMessage.tool_calls && currentMessage.tool_calls.length > 0) {
-        // Add the assistant's tool call request to conversation
-        conversationMessages.push(currentMessage);
-        
-        const toolMessages: any[] = [];
-        
-        // Execute all tool calls
-        for (const toolCall of currentMessage.tool_calls) {
-          const toolName = toolCall.function.name;
-          let args = {};
-          try {
-            args = JSON.parse(toolCall.function.arguments || '{}');
-          } catch (e) {
-            args = {};
-          }
-          
-          // Always inject workspace_slug if tool supports it
-          if (functions.find(f => f.name === toolName)?.parameters?.properties?.workspace_slug) {
-            args = { ...args, workspace_slug: workspaceSlug };
-          }
-
-          let result;
-          try {
-            result = await callMCPTool(req, mcpApiKey, toolName, args);
-            console.log(`Tool ${toolName} succeeded`);
-          } catch (toolError: any) {
-            console.error(`Tool ${toolName} failed:`, toolError);
-            result = { error: toolError.message || 'Tool call failed' };
-          }
-          
-          // Add tool result to messages
-          const toolContent = typeof result === 'string' ? result : JSON.stringify(result);
-          toolMessages.push({
-            role: 'tool' as const,
-            tool_call_id: toolCall.id,
-            content: toolContent,
-          });
-        }
-        
-        // Add tool results to conversation
-        conversationMessages.push(...toolMessages);
-        
-        // Get OpenAI's next move (might be another tool call or final response)
-        const nextCompletion = await openai.chat.completions.create({
-          model: 'gpt-4o',
-          messages: conversationMessages,
-          tools: functions.map(f => ({
-            type: 'function' as const,
-            function: f
-          })),
-          temperature: 0.1,
-          max_tokens: 3000,
-        });
-        
-        currentMessage = nextCompletion.choices[0].message;
-        iteration++;
-        
-        // If OpenAI wants to call more tools, continue the loop
+      while (iteration < maxIterations) {
         if (currentMessage.tool_calls && currentMessage.tool_calls.length > 0) {
-          continue;
-        }
-        
-        // Otherwise, we have a final response
-        finalResponse = currentMessage.content || 'Unable to generate response.';
-        break;
-        
-      } else {
-        // No tool calls, this is the final response
-        finalResponse = currentMessage.content || 'I need more information to help you.';
-        break;
-      }
-    }
-    
-    // Fallback if we hit max iterations or something went wrong
-    if (!finalResponse) {
-      finalResponse = 'Unable to process request. Please try rephrasing.';
-    }
+          conversationMessages.push(currentMessage);
+          
+          const toolMessages: any[] = [];
+          
+          for (const toolCall of currentMessage.tool_calls) {
+            const toolName = toolCall.function.name;
+            let args = {};
+            try {
+              args = JSON.parse(toolCall.function.arguments || '{}');
+            } catch (e) {
+              args = {};
+            }
+            
+            if (functions.find(f => f.name === toolName)?.parameters?.properties?.workspace_slug) {
+              args = { ...args, workspace_slug: workspaceSlug };
+            }
 
-    return NextResponse.json({ response: finalResponse });
+            let result;
+            try {
+              result = await callMCPTool(req, mcpApiKey, toolName, args);
+              console.log(`Tool ${toolName} succeeded`);
+            } catch (toolError: any) {
+              console.error(`Tool ${toolName} failed:`, toolError);
+              result = { error: toolError.message || 'Tool call failed' };
+            }
+            
+            const toolContent = typeof result === 'string' ? result : JSON.stringify(result);
+            toolMessages.push({
+              role: 'tool' as const,
+              tool_call_id: toolCall.id,
+              content: toolContent,
+            });
+          }
+          
+          conversationMessages.push(...toolMessages);
+          
+          const nextCompletion = await openai.chat.completions.create({
+            model: 'gpt-4o',
+            messages: conversationMessages,
+            tools: functions.map(f => ({
+              type: 'function' as const,
+              function: f
+            })),
+            temperature: 0.1,
+            max_tokens: 3000,
+          });
+          
+          currentMessage = nextCompletion.choices[0].message;
+          iteration++;
+          
+          if (currentMessage.tool_calls && currentMessage.tool_calls.length > 0) {
+            continue;
+          }
+          
+          finalResponse = currentMessage.content || 'Unable to generate response.';
+          break;
+          
+        } else {
+          finalResponse = currentMessage.content || 'I need more information to help you.';
+          break;
+        }
+      }
+      
+      if (!finalResponse) {
+        finalResponse = 'Unable to process request. Please try rephrasing.';
+      }
+
+      return NextResponse.json({ response: finalResponse });
+    });
   } catch (e: any) {
     console.error('Agent MCP error:', e);
     return NextResponse.json({ error: e?.message || 'Proxy error' }, { status: 500 });

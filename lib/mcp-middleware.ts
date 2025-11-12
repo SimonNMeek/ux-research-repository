@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { validateApiKey, ApiKeyUser, trackApiUsage } from './api-auth';
-import { query } from '@/db/postgres';
+import { query, withRlsContext } from '@/db/postgres';
 
 export interface McpContext {
   user: ApiKeyUser;
@@ -193,29 +193,27 @@ export function withMcpAuth(
 
       const { user } = authResult;
 
-      // Try to resolve workspace from query param or path
-      const url = new URL(request.url);
-      const workspaceSlug = url.searchParams.get('workspace') || undefined;
+      const response = await withRlsContext({ userId: user.id }, async () => {
+        const url = new URL(request.url);
+        const workspaceSlug = url.searchParams.get('workspace') || undefined;
 
-      let workspace: McpContext['workspace'];
-      if (workspaceSlug) {
-        const resolved = await resolveWorkspace(user, workspaceSlug);
-        if (!resolved) {
-          const errorResponse = NextResponse.json(
-            { error: `Workspace '${workspaceSlug}' not found or access denied` },
-            { status: 404 }
-          );
-          return addCorsHeaders(errorResponse);
+        let workspace: McpContext['workspace'];
+        if (workspaceSlug) {
+          const resolved = await resolveWorkspace(user, workspaceSlug);
+          if (!resolved) {
+            return NextResponse.json(
+              { error: `Workspace '${workspaceSlug}' not found or access denied` },
+              { status: 404 }
+            );
+          }
+          workspace = resolved;
         }
-        workspace = resolved;
-      }
 
-      // Resolve organization context for organization-scoped API keys
-      const organization = await resolveOrganization(user);
+        const organization = await resolveOrganization(user);
+        const context: McpContext = { user, workspace, organization };
+        return handler(context, request);
+      });
 
-      const context: McpContext = { user, workspace, organization };
-
-      const response = await handler(context, request);
       return addCorsHeaders(response);
     } catch (error: any) {
       console.error('MCP API error:', error);
