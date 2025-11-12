@@ -1,6 +1,26 @@
 # Local Postgres Rollout Notes
 
 ## Plain-English Summary
+- The SQLite/Postgres adapter is gone—everything now talks directly to Postgres.
+- Local dev must run a Postgres instance (`ux_repo_test` by default) with `DATABASE_URL` set in `.env.local`.
+- We have reproducible seed scripts (`scripts/seed-local-postgres.ts` + `scripts/seed-sugar-docs.ts`) to recreate demo data, plus `lib/kanban/seed-data/default-board.json` for the Kanban board.
+- RLS context is set explicitly inside `withRlsContext`, so every API call tells Postgres which user/org is making the request (no more manual `set_config` calls scattered around).
+- Health checks (`npm run test:health` / `npm run test:health:both`) are the canary—run them whenever you change backend code or deploy.
+
+## Technical Notes
+- `db/postgres.ts` exports a connection pool, retryable `query()`, `transaction()`, and RLS helpers (`setCurrentUser`, `setCurrentOrganization`, `withRlsContext` backed by `AsyncLocalStorage`).
+- Server code wraps privileged operations in `withRlsContext({ userId, organizationId }, async () => { ... })` so all queries run with RLS enforced.
+- Repositories (`src/server/repo/*`) now call `query` directly; SQLite-specific conditionals are gone.
+- Seed scripts rely on the RLS helpers, so they set the session context before inserting tenant data.
+- Local health suite checks:
+  - `npm run test:health` → local endpoints
+  - `npm run test:health:prod` → prod endpoints
+  - `npm run test:health:both` → both sequentially
+- If `DATABASE_URL` is missing, the dev server aborts on startup, which is intentional: the app requires Postgres everywhere.
+
+# Local Postgres Rollout Notes
+
+## Plain-English Summary
 - We retired the old SQLite/Postgres adapter and now run everything against Postgres, locally and in production.
 - Devs only need a running Postgres instance (`ux_repo_test`); `DATABASE_URL` in `.env.local` points there.
 - Login, workspaces, MCP routes, and other data-heavy features now use the same code paths as production, so fewer environment-only bugs.
