@@ -1,29 +1,36 @@
 # System Health Document
 
-**Last Updated:** 2025-11-12T08:18:10Z  
+**Last Updated:** 2025-11-12T10:24:58Z  
 **Updated By:** GPT-5 Codex  
-**Change Description:** Postgres-only workflow validated; health suite run locally + production (14/14 passing)
+**Change Description:** Added password-reset flow (token table, endpoints, email templates, UI) and reran local health suite (7/7 passing)
 
 ## 🎯 Current Status Snapshot
 
 | Component | Status | Last Tested | Notes |
 |-----------|--------|-------------|-------|
-| **Authentication** | ✅ Working | 2025-11-12T08:17:57Z | `npm run test:health:both` (auth checks) |
-| **Main App (workspaces/projects/docs)** | ✅ Working | 2025-11-12T08:17:57Z | Health suite verifies redirects + API guards; manual SupaDupa seed confirmed |
-| **Search & Favourites** | ✅ Working | 2025-11-12T08:17:57Z | Health suite POSTs confirm auth gating |
-| **Kanban Board** | ✅ Working | 2025-11-12T08:17:57Z | Health suite confirms accessibility; data stored in `lib/kanban/seed-data/default-board.json` |
-| **Organization Management** | ✅ Working | 2025-11-12T08:17:57Z | Health suite ensures `/api/org/users` protected |
-| **Database / RLS** | ✅ Working | 2025-11-12T08:17:57Z | Postgres-only helpers + RLS context validated via seeds/tests |
+| **Authentication** | ✅ Working | 2025-11-12T10:24:58Z | `npm run test:health` (local) |
+| **Main App (workspaces/projects/docs)** | ✅ Working | 2025-11-12T10:24:58Z | Health suite verifies redirects + API guards; SupaDupa seed confirmed |
+| **Search & Favourites** | ✅ Working | 2025-11-12T10:24:58Z | Health suite POSTs confirm auth gating |
+| **Kanban Board** | ✅ Working | 2025-11-12T10:24:58Z | Health suite confirms accessibility; data stored in `lib/kanban/seed-data/default-board.json` |
+| **Organization Management** | ✅ Working | 2025-11-12T10:24:58Z | Health suite ensures `/api/org/users` protected |
+| **Database / RLS** | ✅ Working | 2025-11-12T10:24:58Z | RLS helper (`withRlsContext`) now wraps API routes/repo calls |
 | **Deployment** | ⚠️ Untested in this pass | Last deploy 2025-10-25 | No production deploy during this run; prod health checks still green |
 
 ## 🔧 Recent Changes
 
-### 2025-11-12 – Postgres-Everywhere Refactor
-- **What changed:** Removed reliance on `db/adapter.ts`, standardised all runtime code on `db/postgres.ts`, added `set_config` helpers for RLS, rewrote seed scripts to set tenant context, refreshed docs (`SYSTEM-INSTRUCTIONS.md`, `docs/LOCAL-POSTGRES-NOTES.md`), updated health check script to require `DATABASE_URL`.
-- **Files modified:** `db/postgres.ts`, `lib/auth.ts`, `lib/api-auth.ts`, `lib/mcp-middleware.ts`, `src/server/repo/*`, `scripts/seed-local-postgres.ts`, `scripts/seed-sugar-docs.ts`, `SYSTEM-INSTRUCTIONS.md`, `docs/LOCAL-POSTGRES-NOTES.md`, `scripts/test-system-health.js`, `SYSTEM-HEALTH.md`
-- **Risk level:** **MEDIUM** – everything now depends on Postgres locally; misconfigured `DATABASE_URL` or missing RLS context will break auth.
-- **Testing performed:** `DATABASE_URL=... npm run test:health:both` (Local 7/7, Production 7/7), manual SupaDupa seed verification, Kanban load.
-- **Status:** **SUCCESS** – Postgres-only stack passes health checks in both environments.
+### 2025-11-12 – Postgres-Everywhere Refactor & RLS Helper
+- **What changed:** Removed reliance on `db/adapter.ts`, standardised all runtime code on `db/postgres.ts`, added `set_config` helpers for RLS and later introduced `withRlsContext` (backed by async-local transactions) so API routes automatically set `app.user_id` / `app.organization_id`. Rewrote seed scripts, refreshed docs (`SYSTEM-INSTRUCTIONS.md`, `docs/LOCAL-POSTGRES-NOTES.md`), and tightened health checks.
+- **Files modified:** `db/postgres.ts`, `lib/auth.ts`, `lib/api-auth.ts`, `lib/mcp-middleware.ts`, `src/server/repo/*`, `app/api/workspaces/route.ts`, `app/api/agent-mcp/route.ts`, `scripts/seed-local-postgres.ts`, `scripts/seed-sugar-docs.ts`, `SYSTEM-INSTRUCTIONS.md`, `docs/LOCAL-POSTGRES-NOTES.md`, `scripts/test-system-health.js`, `SYSTEM-HEALTH.md`
+- **Risk level:** **MEDIUM** – everything depends on Postgres locally; misconfigured `DATABASE_URL` or missing RLS wrapper breaks auth.
+- **Testing performed:** `DATABASE_URL=... npm run test:health:both` (Local 7/7, Production 7/7) before merge, followed by `DATABASE_URL=... npm run test:health` after merging RLS helper.
+- **Status:** **SUCCESS**
+
+### 2025-11-12 – Password Reset Loop (Forgot Password)
+- **What changed:** Added `password_reset_tokens` table, password reset APIs (`/api/auth/forgot-password`, `/api/auth/reset-password`), Resend email helper, and UI pages (`/forgot-password`, `/reset-password`) with login link updates.
+- **Files modified:** `db/migrations/015_create_password_reset_tokens.sql`, `lib/password-reset.ts`, `lib/email.ts`, `app/api/auth/forgot-password/route.ts`, `app/api/auth/reset-password/route.ts`, `app/forgot-password/page.tsx`, `app/reset-password/page.tsx`, `app/login/page.tsx`, `SYSTEM-HEALTH.md`
+- **Risk level:** **LOW** – scoped change, limited surface area.
+- **Testing performed:** `DATABASE_URL=... npm run test:health` (local 7/7).
+- **Status:** **SUCCESS**
 
 _(Change log for October remains below for historical context; results are pre-refactor and should be treated as outdated until the new tests run.)_
 
