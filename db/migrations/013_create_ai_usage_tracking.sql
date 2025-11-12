@@ -19,3 +19,4 @@ CREATE INDEX IF NOT EXISTS idx_ai_usage_organization_id ON ai_usage(organization
 CREATE INDEX IF NOT EXISTS idx_ai_usage_workspace_slug ON ai_usage(workspace_slug);
 CREATE INDEX IF NOT EXISTS idx_ai_usage_created_at ON ai_usage(created_at);
 
+

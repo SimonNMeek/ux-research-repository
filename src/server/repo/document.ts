@@ -1,17 +1,16 @@
-import { getDb } from '../../../db/index';
-import { getDbAdapter, getDbType } from '../../../db/adapter';
+import { query } from '../../../db/postgres';
 
 export interface Document {
   id: number;
   project_id: number;
   title: string;
   body: string;
-  original_text?: string;
-  clean_text?: string;
-  source_url?: string;
-  author?: string;
+  original_text?: string | null;
+  clean_text?: string | null;
+  source_url?: string | null;
+  author?: string | null;
   is_favorite: boolean;
-  anonymization_profile_id?: string;
+  anonymization_profile_id?: string | null;
   clean_version: number;
   created_at: string;
 }
@@ -22,34 +21,44 @@ export interface DocumentSearchResult extends Document {
   score?: number;
 }
 
-export class DocumentRepo {
-  private getDbConnection() {
-    return getDbAdapter();
-  }
+function mapDocumentRow(row: any): Document {
+  return {
+    id: row.id,
+    project_id: row.project_id,
+    title: row.title,
+    body: row.body,
+    original_text: row.original_text,
+    clean_text: row.clean_text,
+    source_url: row.source_url,
+    author: row.author,
+    is_favorite: Boolean(row.is_favorite),
+    anonymization_profile_id: row.anonymization_profile_id,
+    clean_version: Number(row.clean_version ?? 0),
+    created_at: row.created_at,
+  };
+}
 
-  async create(projectId: number, data: {
-    title: string;
-    body: string;
-    original_text?: string;
-    clean_text?: string;
-    source_url?: string;
-    author?: string;
-    anonymization_profile_id?: string;
-    clean_version?: number;
-  }): Promise<Document> {
-    const adapter = getDbAdapter();
-    const dbType = getDbType();
-    
-    let result: any;
-    if (dbType === 'postgres') {
-      const queryResult = await adapter.query(`
-        INSERT INTO documents (
-          project_id, title, body, original_text, clean_text, 
-          source_url, author, anonymization_profile_id, clean_version
-        ) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
-        RETURNING *
-      `, [
+export class DocumentRepo {
+  async create(
+    projectId: number,
+    data: {
+      title: string;
+      body: string;
+      original_text?: string;
+      clean_text?: string;
+      source_url?: string;
+      author?: string;
+      anonymization_profile_id?: string;
+      clean_version?: number;
+    }
+  ): Promise<Document> {
+    const result = await query<Document>(
+      `INSERT INTO documents (
+         project_id, title, body, original_text, clean_text,
+         source_url, author, anonymization_profile_id, clean_version
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING *`,
+      [
         projectId,
         data.title,
         data.body,
@@ -58,423 +67,235 @@ export class DocumentRepo {
         data.source_url || null,
         data.author || null,
         data.anonymization_profile_id || null,
-        data.clean_version || 0
-      ]);
-      result = queryResult.rows[0];
-    } else {
-      const db = this.getDbConnection();
-      result = db
-        .prepare(`
-          INSERT INTO documents (
-            project_id, title, body, original_text, clean_text, 
-            source_url, author, anonymization_profile_id, clean_version
-          ) 
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) 
-          RETURNING *
-        `)
-        .get(
-          projectId,
-          data.title,
-          data.body,
-          data.original_text || null,
-          data.clean_text || null,
-          data.source_url || null,
-          data.author || null,
-          data.anonymization_profile_id || null,
-          data.clean_version || 0
-        ) as any;
-    }
-    
-    return {
-      ...result,
-      is_favorite: Boolean(result.is_favorite)
-    };
+        data.clean_version ?? 0,
+      ]
+    );
+
+    return mapDocumentRow(result.rows[0]);
   }
 
-  get(id: number): Document | null {
-    const row = this.getDbConnection()
-      .prepare('SELECT * FROM documents WHERE id = ?')
-      .get(id) as any;
-    
-    if (!row) return null;
-    
-    return {
-      ...row,
-      is_favorite: Boolean(row.is_favorite)
-    };
+  async get(id: number): Promise<Document | null> {
+    const result = await query<Document>('SELECT * FROM documents WHERE id = $1', [id]);
+    const row = result.rows[0];
+    return row ? mapDocumentRow(row) : null;
   }
 
   async list(projectId: number, options: { limit?: number; offset?: number } = {}): Promise<Document[]> {
     const { limit = 50, offset = 0 } = options;
-    const adapter = getDbAdapter();
-    const dbType = getDbType();
-    
-    let rows: any[];
-    if (dbType === 'postgres') {
-      const result = await adapter.query(`
-        SELECT * FROM documents 
-        WHERE project_id = $1 
-        ORDER BY created_at DESC 
-        LIMIT $2 OFFSET $3
-      `, [projectId, limit, offset]);
-      rows = result.rows;
-    } else {
-      const db = this.getDbConnection();
-      rows = db
-        .prepare(`
-          SELECT * FROM documents 
-          WHERE project_id = ? 
-          ORDER BY created_at DESC 
-          LIMIT ? OFFSET ?
-        `)
-        .all(projectId, limit, offset) as any[];
-    }
-    
-    return rows.map(row => ({
-      ...row,
-      is_favorite: Boolean(row.is_favorite)
-    }));
+    const result = await query<Document>(
+      `SELECT * FROM documents
+       WHERE project_id = $1
+       ORDER BY created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [projectId, limit, offset]
+    );
+
+    return result.rows.map(mapDocumentRow);
   }
 
-  async searchFullText(projectIds: number[], query: string, options: { limit?: number } = {}): Promise<DocumentSearchResult[]> {
+  async searchFullText(projectIds: number[], searchTerm: string, options: { limit?: number } = {}): Promise<DocumentSearchResult[]> {
     if (projectIds.length === 0) return [];
-    
     const { limit = 50 } = options;
-    const adapter = getDbAdapter();
-    const dbType = getDbType();
-    
-    let rows: any[];
-    if (dbType === 'postgres') {
-      // PostgreSQL full-text search
-      const placeholders = projectIds.map((_, i) => `$${i + 1}`).join(',');
-      const result = await adapter.query(`
-        SELECT 
-          d.*,
-          p.slug as project_slug,
-          ts_headline('english', d.body, plainto_tsquery('english', $${projectIds.length + 1}), 'MaxWords=32, MinWords=16') as snippet
-        FROM documents d
-        JOIN projects p ON d.project_id = p.id
-        WHERE d.project_id IN (${placeholders})
-          AND to_tsvector('english', d.title || ' ' || d.body) @@ plainto_tsquery('english', $${projectIds.length + 1})
-        ORDER BY ts_rank(to_tsvector('english', d.title || ' ' || d.body), plainto_tsquery('english', $${projectIds.length + 1})) DESC
-        LIMIT $${projectIds.length + 2}
-      `, [...projectIds, query, limit]);
-      rows = result.rows;
-    } else {
-      // SQLite FTS search
-      const placeholders = projectIds.map(() => '?').join(',');
-      rows = adapter.prepare(`
-        SELECT 
-          d.*,
-          p.slug as project_slug,
-          snippet(documents_fts, 1, '<mark>', '</mark>', '...', 32) as snippet
-        FROM documents_fts fts
-        JOIN documents d ON d.id = fts.rowid
-        JOIN projects p ON d.project_id = p.id
-        WHERE d.project_id IN (${placeholders})
-          AND documents_fts MATCH ?
-        ORDER BY rank
-        LIMIT ?
-      `).all(...projectIds, query, limit) as any[];
-    }
-    
-    return rows.map(row => ({
-      ...row,
-      is_favorite: Boolean(row.is_favorite)
+    const placeholders = projectIds.map((_, i) => `$${i + 1}`).join(',');
+    const termPlaceholder = `$${projectIds.length + 1}`;
+    const limitPlaceholder = `$${projectIds.length + 2}`;
+
+    const result = await query<DocumentSearchResult>(
+      `SELECT
+         d.*,
+         p.slug AS project_slug,
+         ts_headline('english', d.body, plainto_tsquery('english', ${termPlaceholder}), 'MaxWords=32, MinWords=16') AS snippet,
+         ts_rank(to_tsvector('english', d.title || ' ' || d.body), plainto_tsquery('english', ${termPlaceholder})) AS score
+       FROM documents d
+       JOIN projects p ON d.project_id = p.id
+       WHERE d.project_id IN (${placeholders})
+         AND to_tsvector('english', d.title || ' ' || d.body) @@ plainto_tsquery('english', ${termPlaceholder})
+       ORDER BY score DESC
+       LIMIT ${limitPlaceholder}`,
+      [...projectIds, searchTerm, limit]
+    );
+
+    return result.rows.map((row) => ({
+      ...mapDocumentRow(row),
+      project_slug: row.project_slug,
+      snippet: row.snippet,
+      score: row.score,
     }));
   }
 
-  // Simple ILIKE search for title and body (fallback)
-  searchSimple(projectIds: number[], query: string, options: { limit?: number } = {}): DocumentSearchResult[] {
+  async searchSimple(projectIds: number[], searchTerm: string, options: { limit?: number } = {}): Promise<DocumentSearchResult[]> {
     if (projectIds.length === 0) return [];
-    
     const { limit = 50 } = options;
-    const placeholders = projectIds.map(() => '?').join(',');
-    const searchTerm = `%${query}%`;
-    
-    const rows = this.getDbConnection()
-      .prepare(`
-        SELECT 
-          d.*,
-          p.slug as project_slug,
-          CASE 
-            WHEN d.title LIKE ? THEN substr(d.title, 1, 100)
-            ELSE substr(d.body, 1, 200)
-          END as snippet
-        FROM documents d
-        JOIN projects p ON d.project_id = p.id
-        WHERE d.project_id IN (${placeholders})
-          AND (d.title LIKE ? OR d.body LIKE ?)
-        ORDER BY 
-          CASE WHEN d.title LIKE ? THEN 1 ELSE 2 END,
-          d.created_at DESC
-        LIMIT ?
-      `)
-      .all(searchTerm, ...projectIds, searchTerm, searchTerm, searchTerm, limit) as any[];
-    
-    return rows.map(row => ({
-      ...row,
-      is_favorite: Boolean(row.is_favorite)
+    const placeholders = projectIds.map((_, i) => `$${i + 2}`).join(',');
+    const likeTerm = `%${searchTerm}%`;
+
+    const result = await query<DocumentSearchResult>(
+      `SELECT
+         d.*,
+         p.slug AS project_slug,
+         CASE
+           WHEN d.title ILIKE $1 THEN LEFT(d.title, 100)
+           ELSE LEFT(d.body, 200)
+         END AS snippet
+       FROM documents d
+       JOIN projects p ON d.project_id = p.id
+       WHERE d.project_id IN (${placeholders})
+         AND (d.title ILIKE $1 OR d.body ILIKE $1)
+       ORDER BY
+         CASE WHEN d.title ILIKE $1 THEN 1 ELSE 2 END,
+         d.created_at DESC
+       LIMIT $${projectIds.length + 2}`,
+      [likeTerm, ...projectIds, limit]
+    );
+
+    return result.rows.map((row) => ({
+      ...mapDocumentRow(row),
+      project_slug: row.project_slug,
+      snippet: row.snippet,
     }));
   }
 
-  update(id: number, data: {
-    title?: string;
-    body?: string;
-    original_text?: string;
-    clean_text?: string;
-    source_url?: string;
-    author?: string;
-    is_favorite?: boolean;
-    anonymization_profile_id?: string;
-    clean_version?: number;
-  }): Document | null {
+  async update(
+    id: number,
+    data: {
+      title?: string;
+      body?: string;
+      original_text?: string | null;
+      clean_text?: string | null;
+      source_url?: string | null;
+      author?: string | null;
+      is_favorite?: boolean;
+      anonymization_profile_id?: string | null;
+      clean_version?: number;
+    }
+  ): Promise<Document | null> {
     const updates: string[] = [];
     const values: any[] = [];
-    
+
     Object.entries(data).forEach(([key, value]) => {
       if (value !== undefined) {
-        updates.push(`${key} = ?`);
+        updates.push(`${key} = $${values.length + 1}`);
         values.push(value);
       }
     });
-    
+
     if (updates.length === 0) {
       return this.get(id);
     }
-    
+
     values.push(id);
-    
-    const result = this.getDbConnection()
-      .prepare(`UPDATE documents SET ${updates.join(', ')} WHERE id = ? RETURNING *`)
-      .get(...values) as any;
-    
-    if (!result) return null;
-    
-    return {
-      ...result,
-      is_favorite: Boolean(result.is_favorite)
-    };
+    const result = await query<Document>(
+      `UPDATE documents
+       SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $${values.length}
+       RETURNING *`,
+      values
+    );
+
+    const row = result.rows[0];
+    return row ? mapDocumentRow(row) : null;
   }
 
-  delete(id: number): boolean {
-    const result = this.getDbConnection()
-      .prepare('DELETE FROM documents WHERE id = ?')
-      .run(id);
-    
-    return result.changes > 0;
+  async delete(id: number): Promise<boolean> {
+    const result = await query('DELETE FROM documents WHERE id = $1', [id]);
+    return (result.rowCount ?? 0) > 0;
   }
 
-  // Delete with workspace validation
   async deleteWithWorkspaceValidation(id: number, workspaceId: number): Promise<boolean> {
-    const adapter = getDbAdapter();
-    const dbType = getDbType();
-    
-    if (dbType === 'postgres') {
-      const result = await adapter.query(`
-        DELETE FROM documents 
-        WHERE id = $1 
-        AND project_id IN (
-          SELECT id FROM projects WHERE workspace_id = $2
-        )
-      `, [id, workspaceId]);
-      
-      return result.rowCount > 0;
-    } else {
-      const db = this.getDbConnection();
-      const result = db
-        .prepare(`
-          DELETE FROM documents 
-          WHERE id = ? 
-          AND project_id IN (
-            SELECT id FROM projects WHERE workspace_id = ?
-          )
-        `)
-        .run(id, workspaceId);
-      
-      return result.changes > 0;
-    }
+    const result = await query(
+      `DELETE FROM documents
+       WHERE id = $1
+         AND project_id IN (SELECT id FROM projects WHERE workspace_id = $2)`,
+      [id, workspaceId]
+    );
+
+    return (result.rowCount ?? 0) > 0;
   }
 
-  // Get document by ID with workspace validation
   async getById(id: number, workspaceId: number): Promise<Document | null> {
-    const adapter = getDbAdapter();
-    const dbType = getDbType();
-    
-    let row: any;
-    if (dbType === 'postgres') {
-      const result = await adapter.query(`
-        SELECT d.* 
-        FROM documents d
-        JOIN projects p ON d.project_id = p.id
-        WHERE d.id = $1 AND p.workspace_id = $2
-      `, [id, workspaceId]);
-      row = result.rows[0];
-    } else {
-      const db = this.getDbConnection();
-      row = db
-        .prepare(`
-          SELECT d.* 
-          FROM documents d
-          JOIN projects p ON d.project_id = p.id
-          WHERE d.id = ? AND p.workspace_id = ?
-        `)
-        .get(id, workspaceId) as any;
-    }
-    
-    if (!row) return null;
-    
-    return {
-      ...row,
-      is_favorite: Boolean(row.is_favorite)
-    };
+    const result = await query<DocumentSearchResult>(
+      `SELECT d.*
+       FROM documents d
+       JOIN projects p ON d.project_id = p.id
+       WHERE d.id = $1 AND p.workspace_id = $2`,
+      [id, workspaceId]
+    );
+
+    const row = result.rows[0];
+    return row ? mapDocumentRow(row) : null;
   }
 
-  // Toggle favourite status with workspace validation
   async toggleFavorite(id: number, workspaceId: number): Promise<{ is_favorite: boolean }> {
-    const adapter = this.getDbConnection();
-    const dbType = getDbType();
-    
-    // First, check if document exists and get current status
-    let current;
-    if (dbType === 'postgres') {
-      const result = await adapter.query(
-        `SELECT d.is_favorite 
-         FROM documents d
-         WHERE d.id = $1 
-         AND d.project_id IN (
-           SELECT p.id FROM projects p WHERE p.workspace_id = $2
-         )`,
-        [id, workspaceId]
-      );
-      current = result.rows[0];
-    } else {
-      const stmt = adapter.prepare(`
-        SELECT d.is_favorite 
-        FROM documents d
-        WHERE d.id = ? 
-        AND d.project_id IN (
-          SELECT p.id FROM projects p WHERE p.workspace_id = ?
-        )
-      `);
-      current = stmt.get([id, workspaceId]);
-    }
-    
-    if (!current) {
+    const result = await query<{ is_favorite: boolean }>(
+      `UPDATE documents SET is_favorite = NOT is_favorite
+       WHERE id = $1 AND project_id IN (
+         SELECT id FROM projects WHERE workspace_id = $2
+       )
+       RETURNING is_favorite`,
+      [id, workspaceId]
+    );
+
+    const row = result.rows[0];
+    if (!row) {
       throw new Error('Document not found or access denied');
     }
-    
-    // Toggle the favourite status
-    const newStatus = !current.is_favorite;
-    
-    // Update the document
-    let updateResult;
-    if (dbType === 'postgres') {
-      updateResult = await adapter.query(
-        `UPDATE documents 
-         SET is_favorite = $1 
-         WHERE id = $2 
-         AND project_id IN (
-           SELECT p.id FROM projects p WHERE p.workspace_id = $3
-         )`,
-        [newStatus ? 1 : 0, id, workspaceId]
-      );
-    } else {
-      const stmt = adapter.prepare(`
-        UPDATE documents 
-        SET is_favorite = ? 
-        WHERE id = ? 
-        AND project_id IN (
-          SELECT p.id FROM projects p WHERE p.workspace_id = ?
-        )
-      `);
-      updateResult = stmt.run([newStatus ? 1 : 0, id, workspaceId]);
-    }
-    
-    // Check if the update was successful
-    if (dbType === 'postgres' && updateResult.rowCount === 0) {
-      throw new Error('Document not found or access denied');
-    } else if (dbType === 'sqlite' && updateResult.changes === 0) {
-      throw new Error('Document not found or access denied');
-    }
-    
-    return { is_favorite: newStatus };
+
+    return { is_favorite: Boolean(row.is_favorite) };
   }
 
-  // Get favorite documents
   async getFavorites(projectIds: number[], options: { limit?: number } = {}): Promise<DocumentSearchResult[]> {
     if (projectIds.length === 0) return [];
-    
     const { limit = 50 } = options;
-    const adapter = getDbAdapter();
-    const dbType = getDbType();
-    
-    let rows: any[];
-    if (dbType === 'postgres') {
-      const placeholders = projectIds.map((_, i) => `$${i + 1}`).join(',');
-      const result = await adapter.query(`
-        SELECT 
-          d.*,
-          p.slug as project_slug,
-          LEFT(d.body, 200) as snippet
-        FROM documents d
-        JOIN projects p ON d.project_id = p.id
-        WHERE d.project_id IN (${placeholders})
-          AND d.is_favorite = true
-        ORDER BY d.created_at DESC
-        LIMIT $${projectIds.length + 1}
-      `, [...projectIds, limit]);
-      rows = result.rows;
-    } else {
-      const placeholders = projectIds.map(() => '?').join(',');
-      rows = adapter.prepare(`
-        SELECT 
-          d.*,
-          p.slug as project_slug,
-          substr(d.body, 1, 200) as snippet
-        FROM documents d
-        JOIN projects p ON d.project_id = p.id
-        WHERE d.project_id IN (${placeholders})
-          AND d.is_favorite = 1
-        ORDER BY d.created_at DESC
-        LIMIT ?
-      `).all(...projectIds, limit) as any[];
-    }
-    
-    return rows.map(row => ({
-      ...row,
-      is_favorite: Boolean(row.is_favorite)
+    const placeholders = projectIds.map((_, i) => `$${i + 1}`).join(',');
+    const limitPlaceholder = `$${projectIds.length + 1}`;
+
+    const result = await query<DocumentSearchResult>(
+      `SELECT
+         d.*,
+         p.slug AS project_slug,
+         LEFT(d.body, 200) AS snippet
+       FROM documents d
+       JOIN projects p ON d.project_id = p.id
+       WHERE d.project_id IN (${placeholders})
+         AND d.is_favorite = TRUE
+       ORDER BY d.created_at DESC
+       LIMIT ${limitPlaceholder}`,
+      [...projectIds, limit]
+    );
+
+    return result.rows.map((row) => ({
+      ...mapDocumentRow(row),
+      project_slug: row.project_slug,
+      snippet: row.snippet,
     }));
   }
 
-  // Get document with project info for workspace validation
-  getWithProject(id: number): (Document & { workspace_id: number; project_slug: string }) | null {
-    const row = this.getDbConnection()
-      .prepare(`
-        SELECT d.*, p.workspace_id, p.slug as project_slug
-        FROM documents d
-        JOIN projects p ON d.project_id = p.id
-        WHERE d.id = ?
-      `)
-      .get(id) as any;
-    
+  async getWithProject(id: number): Promise<(Document & { workspace_id: number; project_slug: string }) | null> {
+    const result = await query<Document & { workspace_id: number; project_slug: string }>(
+      `SELECT d.*, p.workspace_id, p.slug AS project_slug
+       FROM documents d
+       JOIN projects p ON d.project_id = p.id
+       WHERE d.id = $1`,
+      [id]
+    );
+
+    const row = result.rows[0];
     if (!row) return null;
-    
+
     return {
-      ...row,
-      is_favorite: Boolean(row.is_favorite)
+      ...mapDocumentRow(row),
+      workspace_id: row.workspace_id,
+      project_slug: row.project_slug,
     };
   }
 
-  // Count documents in projects
-  countByProjects(projectIds: number[]): number {
+  async countByProjects(projectIds: number[]): Promise<number> {
     if (projectIds.length === 0) return 0;
-    
-    const placeholders = projectIds.map(() => '?').join(',');
-    const result = this.getDbConnection()
-      .prepare(`SELECT COUNT(*) as count FROM documents WHERE project_id IN (${placeholders})`)
-      .get(...projectIds) as any;
-    
-    return result.count;
+    const placeholders = projectIds.map((_, i) => `$${i + 1}`).join(',');
+    const result = await query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM documents WHERE project_id IN (${placeholders})`,
+      projectIds
+    );
+    return Number(result.rows[0]?.count ?? 0);
   }
 }

@@ -16,12 +16,16 @@ const TESTS = {
   local: {
     url: BASE_URL,
     name: 'Local Development',
-    auth: { email: 'admin@sol.com', password: 'admin123' }
+    auth: { email: 'admin@sol.com', password: 'admin123' },
+    workspaceSlug: 'supadupa-app',
+    assistantMessage: ''
   },
   production: {
     url: PROD_URL,
     name: 'Production (Vercel)',
-    auth: { email: 'admin@sol.com', password: 'admin123' }
+    auth: { email: 'admin@sol.com', password: 'admin123' },
+    workspaceSlug: 'supadupa-app',
+    assistantMessage: ''
   }
 };
 
@@ -237,24 +241,29 @@ async function testDatabaseConfig() {
     const path = require('path');
     const envPath = path.join(process.cwd(), '.env.local');
     
-    if (!fs.existsSync(envPath)) {
-      console.log(`⚠️  .env.local not found - using defaults`);
+    const envVar = (process.env.DATABASE_URL || '').trim();
+    if (envVar.length > 0) {
+      console.log(`✅ DATABASE_URL is set via environment (length ${envVar.length} chars)`);
       return;
+    }
+    
+    if (!fs.existsSync(envPath)) {
+      throw new Error('DATABASE_URL missing: set it in the environment or .env.local before running health checks.');
     }
     
     const envContent = fs.readFileSync(envPath, 'utf8');
     const hasDatabaseUrl = envContent.match(/^DATABASE_URL=(.+)$/m);
     
-    if (hasDatabaseUrl && hasDatabaseUrl[1].trim()) {
-      console.log(`✅ DATABASE_URL is set (PostgreSQL mode)`);
-      console.log(`   Connection string length: ${hasDatabaseUrl[1].trim().length} chars`);
-    } else {
-      console.log(`⚠️  DATABASE_URL is empty/not set (SQLite mode)`);
-      console.log(`   This means you're using local SQLite, not production data`);
-      console.log(`   To restore: vercel env pull .env.local --environment=development`);
+    if (!hasDatabaseUrl || !hasDatabaseUrl[1].trim()) {
+      throw new Error('DATABASE_URL is empty in .env.local. Local development now requires Postgres.');
     }
+    
+    const connectionString = hasDatabaseUrl[1].trim();
+    console.log(`✅ DATABASE_URL is set in .env.local (length ${connectionString.length} chars)`);
+    console.log(`   Ensure the database exists and is reachable before continuing.`);
   } catch (error) {
     console.log(`❌ Could not check database config: ${error.message}`);
+    throw error;
   }
 }
 
@@ -309,8 +318,8 @@ async function testAIAssistant(env) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        message: 'test',
-        workspaceSlug: 'test-workspace'
+        message: env.assistantMessage ?? '',
+        workspaceSlug: env.workspaceSlug ?? 'supadupa-app'
       })
     });
     

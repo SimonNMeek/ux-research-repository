@@ -215,7 +215,7 @@ export async function transaction<T>(
  * This must be called at the start of each request
  */
 export async function setCurrentUser(client: PoolClient, userId: number): Promise<void> {
-  await client.query('SET LOCAL app.user_id = $1', [userId]);
+  await client.query("SELECT set_config('app.user_id', $1::text, true)", [String(userId)]);
 }
 
 /**
@@ -225,7 +225,7 @@ export async function setCurrentOrganization(
   client: PoolClient,
   organizationId: number
 ): Promise<void> {
-  await client.query('SET LOCAL app.organization_id = $1', [organizationId]);
+  await client.query("SELECT set_config('app.organization_id', $1::text, true)", [String(organizationId)]);
 }
 
 /**

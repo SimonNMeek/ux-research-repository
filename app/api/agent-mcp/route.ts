@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { getDbAdapter, getDbType } from '@/db/adapter';
+import { query } from '@/db/postgres';
 
 // Smart proxy that uses OpenAI to orchestrate MCP tools
 // Expects body: { message: string, workspaceSlug: string }
@@ -74,20 +74,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Get workspace and organization
-    const adapter = getDbAdapter();
-    const dbType = getDbType();
-    
-    let workspace: any;
-    if (dbType === 'postgres') {
-      const result = await adapter.query(
-        'SELECT id, slug, name, organization_id FROM workspaces WHERE slug = $1',
-        [workspaceSlug]
-      );
-      workspace = result.rows[0];
-    } else {
-      const db = adapter as any;
-      workspace = db.prepare('SELECT id, slug, name, organization_id FROM workspaces WHERE slug = ?').get(workspaceSlug);
-    }
+    const workspaceResult = await query(
+      'SELECT id, slug, name, organization_id FROM workspaces WHERE slug = $1',
+      [workspaceSlug]
+    );
+    const workspace = workspaceResult.rows[0];
     
     if (!workspace) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
