@@ -136,3 +136,82 @@ export function generateSignupUrl(token: string, baseUrl?: string): string {
   
   return `${base}/signup?invite=${token}`;
 }
+
+export interface PasswordResetEmailData {
+  to: string;
+  resetUrl: string;
+  expiresInMinutes: number;
+}
+
+export async function sendPasswordResetEmail(data: PasswordResetEmailData) {
+  if (!process.env.RESEND_API_KEY) {
+    console.warn('RESEND_API_KEY not set, skipping password reset email send');
+    return { success: false, error: 'Email service not configured' };
+  }
+
+  if (process.env.DISABLE_EMAIL_SENDING === 'true') {
+    console.log('Email sending disabled for testing. Password reset data:', data);
+    return { success: true, messageId: 'disabled-for-testing' };
+  }
+
+  const senderAddresses = [
+    process.env.RESEND_FROM_ADDRESS,
+    'support@resend.dev',
+    'noreply@resend.dev',
+  ].filter(Boolean);
+
+  const emailBody = `Hi there,
+
+We received a request to reset the password for your Sol Research account.
+
+To reset your password, click the link below:
+${data.resetUrl}
+
+This link will expire in ${Math.round(data.expiresInMinutes)} minutes. If you didn't request a password reset, you can safely ignore this email—your password will remain unchanged.
+
+Stay curious,
+The Sol Research Team
+
+---
+This is an automated message from Sol Research. Please do not reply directly to this email.`;
+
+  for (const fromAddress of senderAddresses) {
+    try {
+      const resendInstance = getResendInstance();
+      const result = await resendInstance.emails.send({
+        from: fromAddress!,
+        to: [data.to],
+        subject: 'Reset your Sol Research password',
+        text: emailBody,
+      });
+
+      return { success: true, messageId: result.data?.id };
+    } catch (error) {
+      console.error(`Failed to send password reset email from ${fromAddress}:`, error);
+      if (error instanceof Error && error.message.includes('403')) {
+        continue;
+      }
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  return { success: false, error: 'All sender addresses failed. Please verify your Resend configuration.' };
+}
+
+export function generatePasswordResetUrl(token: string, baseUrl?: string): string {
+  let base: string;
+
+  if (baseUrl) {
+    base = baseUrl;
+  } else if (process.env.NEXT_PUBLIC_APP_URL) {
+    base = process.env.NEXT_PUBLIC_APP_URL;
+  } else if (process.env.NODE_ENV === 'production') {
+    base = 'https://ux-repo-web.vercel.app';
+  } else if (process.env.VERCEL_URL) {
+    base = `https://${process.env.VERCEL_URL}`;
+  } else {
+    base = 'http://localhost:3000';
+  }
+
+  return `${base}/reset-password?token=${token}`;
+}
