@@ -40,3 +40,4 @@ OPENAI_API_KEY=your_openai_api_key_here
 4. AI will search relevant documents and provide contextual answers
 5. Sources are automatically cited in responses
 
+

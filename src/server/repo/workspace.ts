@@ -1,5 +1,4 @@
-import { getDb } from '../../../db/index';
-import { getDbAdapter, getDbType } from '../../../db/adapter';
+import { query } from '../../../db/postgres';
 
 export interface Workspace {
   id: number;
@@ -11,149 +10,100 @@ export interface Workspace {
 }
 
 export class WorkspaceRepo {
-  private getDbConnection() {
-    return getDb();
+  private normalizeMetadata(row: any): Record<string, any> {
+    if (!row?.metadata) return {};
+    if (typeof row.metadata === 'string') {
+      try {
+        return JSON.parse(row.metadata);
+      } catch {
+        return {};
+      }
+    }
+    return row.metadata;
+  }
+
+  private mapRow(row: any): Workspace {
+    return {
+      id: row.id,
+      slug: row.slug,
+      name: row.name,
+      organization_id: row.organization_id,
+      created_at: row.created_at,
+      metadata: this.normalizeMetadata(row),
+    };
   }
 
   async getBySlug(slug: string): Promise<Workspace | null> {
-    const adapter = getDbAdapter();
-    const dbType = getDbType();
-    
-    let row: any;
-    if (dbType === 'postgres') {
-      const result = await adapter.query('SELECT * FROM workspaces WHERE slug = $1', [slug]);
-      row = result.rows[0];
-    } else {
-      row = adapter.prepare('SELECT * FROM workspaces WHERE slug = ?').get(slug);
-    }
-    
+    const result = await query<Workspace>('SELECT * FROM workspaces WHERE slug = $1', [slug]);
+    const row = result.rows[0];
     if (!row) return null;
-    
-    // Handle metadata - PostgreSQL returns JSON objects, SQLite returns strings
-    let metadata = {};
-    if (row.metadata) {
-      if (typeof row.metadata === 'string') {
-        metadata = JSON.parse(row.metadata);
-      } else {
-        metadata = row.metadata;
-      }
-    }
-    
-    return {
-      ...row,
-      metadata
-    };
+    return this.mapRow(row);
   }
 
-  listAll(): Workspace[] {
-    const rows = this.getDbConnection()
-      .prepare('SELECT * FROM workspaces ORDER BY name')
-      .all() as any[];
-    
-    return rows.map(row => {
-      // Handle metadata - PostgreSQL returns JSON objects, SQLite returns strings
-      let metadata = {};
-      if (row.metadata) {
-        if (typeof row.metadata === 'string') {
-          metadata = JSON.parse(row.metadata);
-        } else {
-          metadata = row.metadata;
-        }
-      }
-      
-      return {
-        ...row,
-        metadata
-      };
-    });
+  async listAll(): Promise<Workspace[]> {
+    const result = await query<Workspace>('SELECT * FROM workspaces ORDER BY name');
+    return result.rows.map((row) => this.mapRow(row));
   }
 
-  /**
-   * List workspaces by organization
-   */
-  listByOrganization(organizationId: number): Workspace[] {
-    const rows = this.getDbConnection()
-      .prepare('SELECT * FROM workspaces WHERE organization_id = ? ORDER BY name')
-      .all(organizationId) as any[];
-    
-    return rows.map(row => {
-      // Handle metadata - PostgreSQL returns JSON objects, SQLite returns strings
-      let metadata = {};
-      if (row.metadata) {
-        if (typeof row.metadata === 'string') {
-          metadata = JSON.parse(row.metadata);
-        } else {
-          metadata = row.metadata;
-        }
-      }
-      
-      return {
-        ...row,
-        metadata
-      };
-    });
+  async listByOrganization(organizationId: number): Promise<Workspace[]> {
+    const result = await query<Workspace>(
+      'SELECT * FROM workspaces WHERE organization_id = $1 ORDER BY name',
+      [organizationId]
+    );
+    return result.rows.map((row) => this.mapRow(row));
   }
 
-  create(data: { 
-    slug: string; 
-    name: string; 
+  async create(data: {
+    slug: string;
+    name: string;
     organization_id: number;
-    metadata?: Record<string, any> 
-  }): Workspace {
-    const metadata = JSON.stringify(data.metadata || {});
-    
-    const result = this.getDbConnection()
-      .prepare('INSERT INTO workspaces (slug, name, organization_id, metadata) VALUES (?, ?, ?, ?) RETURNING *')
-      .get(data.slug, data.name, data.organization_id, metadata) as any;
-    
-    return {
-      ...result,
-      metadata: JSON.parse(result.metadata || '{}')
-    };
+    metadata?: Record<string, any>;
+  }): Promise<Workspace> {
+    const result = await query<Workspace>(
+      `INSERT INTO workspaces (slug, name, organization_id, metadata)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [data.slug, data.name, data.organization_id, JSON.stringify(data.metadata || {})]
+    );
+    return this.mapRow(result.rows[0]);
   }
 
-  update(id: number, data: { name?: string; metadata?: Record<string, any> }): Workspace | null {
+  async update(id: number, data: { name?: string; metadata?: Record<string, any> }): Promise<Workspace | null> {
     const updates: string[] = [];
     const values: any[] = [];
-    
+
     if (data.name !== undefined) {
-      updates.push('name = ?');
+      updates.push(`name = $${values.length + 1}`);
       values.push(data.name);
     }
-    
+
     if (data.metadata !== undefined) {
-      updates.push('metadata = ?');
+      updates.push(`metadata = $${values.length + 1}`);
       values.push(JSON.stringify(data.metadata));
     }
-    
+
     if (updates.length === 0) {
       return this.getById(id);
     }
-    
+
     values.push(id);
-    
-    const result = this.getDbConnection()
-      .prepare(`UPDATE workspaces SET ${updates.join(', ')} WHERE id = ? RETURNING *`)
-      .get(...values) as any;
-    
-    if (!result) return null;
-    
-    return {
-      ...result,
-      metadata: JSON.parse(result.metadata || '{}')
-    };
+    const result = await query<Workspace>(
+      `UPDATE workspaces
+       SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $${values.length}
+       RETURNING *`,
+      values
+    );
+
+    const row = result.rows[0];
+    if (!row) return null;
+    return this.mapRow(row);
   }
 
-  private getById(id: number): Workspace | null {
-    const row = this.getDbConnection()
-      .prepare('SELECT * FROM workspaces WHERE id = ?')
-      .get(id) as any;
-    
+  private async getById(id: number): Promise<Workspace | null> {
+    const result = await query<Workspace>('SELECT * FROM workspaces WHERE id = $1', [id]);
+    const row = result.rows[0];
     if (!row) return null;
-    
-    return {
-      ...row,
-      metadata: JSON.parse(row.metadata || '{}')
-    };
+    return this.mapRow(row);
   }
 }

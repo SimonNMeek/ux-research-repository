@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { WorkspaceRepo } from './repo/workspace';
 import { OrganizationRepo } from './repo/organization';
 import { getSessionCookie, validateSession, User } from '@/lib/auth';
+import { query } from '@/db/postgres';
 
 export interface WorkspaceContext {
   organization: {
@@ -125,42 +126,30 @@ export class WorkspaceResolver {
     // CRITICAL SECURITY: Check organization AND workspace access
     // Super admins bypass this check
     if (user.system_role !== 'super_admin') {
-      const { getDbAdapter, getDbType } = await import('@/db/adapter');
-      const adapter = getDbAdapter();
-      const dbType = getDbType();
-      
-      // Check organization access with retry logic
       let orgAccess: { role: 'owner' | 'admin' | 'member' } | undefined;
       retries = 3;
-      
+
       while (retries > 0) {
         try {
-          if (dbType === 'postgres') {
-            const result = await adapter.query(`
-              SELECT role FROM user_organizations 
-              WHERE user_id = $1 AND organization_id = $2
-            `, [user.id, organization.id]);
-            orgAccess = result.rows[0] as { role: 'owner' | 'admin' | 'member' } | undefined;
-          } else {
-            const db = (await import('@/db')).getDb();
-            orgAccess = db.prepare(`
-              SELECT role FROM user_organizations 
-              WHERE user_id = ? AND organization_id = ?
-            `).get(user.id, organization.id) as { role: 'owner' | 'admin' | 'member' } | undefined;
-          }
-          break; // Success, exit retry loop
+          const result = await query<{ role: 'owner' | 'admin' | 'member' }>(
+            `SELECT role FROM user_organizations WHERE user_id = $1 AND organization_id = $2`,
+            [user.id, organization.id]
+          );
+          orgAccess = result.rows[0];
+          break;
         } catch (error: any) {
           retries--;
           console.error(`Organization access check error (retry ${3 - retries}/3):`, error);
-          
+
           if (retries > 0 && (error.message?.includes('ETIMEDOUT') || error.code === 'ETIMEDOUT')) {
-            console.log(`Retrying organization access check for workspace '${workspaceSlug}'... (${retries} attempts left)`);
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between retries
+            console.log(
+              `Retrying organization access check for workspace '${workspaceSlug}'... (${retries} attempts left)`
+            );
+            await new Promise(resolve => setTimeout(resolve, 1000));
             continue;
-          } else {
-            // All retries failed or non-timeout error
-            throw error;
           }
+
+          throw error;
         }
       }
 
@@ -168,38 +157,30 @@ export class WorkspaceResolver {
         throw new Error(`Access denied to organization '${organization.slug}'`);
       }
 
-      // Check workspace access with retry logic
       let workspaceAccess: { role: 'owner' | 'admin' | 'member' | 'viewer' } | undefined;
       retries = 3;
-      
+
       while (retries > 0) {
         try {
-          if (dbType === 'postgres') {
-            const result = await adapter.query(`
-              SELECT role FROM user_workspaces 
-              WHERE user_id = $1 AND workspace_id = $2
-            `, [user.id, workspace.id]);
-            workspaceAccess = result.rows[0] as { role: 'owner' | 'admin' | 'member' | 'viewer' } | undefined;
-          } else {
-            const db = (await import('@/db')).getDb();
-            workspaceAccess = db.prepare(`
-              SELECT role FROM user_workspaces 
-              WHERE user_id = ? AND workspace_id = ?
-            `).get(user.id, workspace.id) as { role: 'owner' | 'admin' | 'member' | 'viewer' } | undefined;
-          }
-          break; // Success, exit retry loop
+          const result = await query<{ role: 'owner' | 'admin' | 'member' | 'viewer' }>(
+            `SELECT role FROM user_workspaces WHERE user_id = $1 AND workspace_id = $2`,
+            [user.id, workspace.id]
+          );
+          workspaceAccess = result.rows[0];
+          break;
         } catch (error: any) {
           retries--;
           console.error(`Workspace access check error (retry ${3 - retries}/3):`, error);
-          
+
           if (retries > 0 && (error.message?.includes('ETIMEDOUT') || error.code === 'ETIMEDOUT')) {
-            console.log(`Retrying workspace access check for workspace '${workspaceSlug}'... (${retries} attempts left)`);
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between retries
+            console.log(
+              `Retrying workspace access check for workspace '${workspaceSlug}'... (${retries} attempts left)`
+            );
+            await new Promise(resolve => setTimeout(resolve, 1000));
             continue;
-          } else {
-            // All retries failed or non-timeout error
-            throw error;
           }
+
+          throw error;
         }
       }
 

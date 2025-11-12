@@ -5,8 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { validateApiKey, ApiKeyUser, trackApiUsage } from './api-auth';
-import { getDbAdapter, getDbType } from '@/db/adapter';
-import { getDb } from '@/db';
+import { query } from '@/db/postgres';
 
 export interface McpContext {
   user: ApiKeyUser;
@@ -80,50 +79,32 @@ export async function resolveWorkspace(
     return null;
   }
 
-  const adapter = getDbAdapter();
-  const dbType = getDbType();
+  const result = await query<{
+    id: number;
+    slug: string;
+    name: string;
+    organization_id: number;
+  }>(
+    `SELECT id, slug, name, organization_id FROM workspaces WHERE slug = $1`,
+    [workspaceSlug]
+  );
 
-  // Get workspace
-  let workspace: any;
-  if (dbType === 'postgres') {
-    const result = await adapter.query(
-      'SELECT id, slug, name, organization_id FROM workspaces WHERE slug = $1',
-      [workspaceSlug]
-    );
-    workspace = result.rows[0];
-  } else {
-    const db = getDb();
-    workspace = db
-      .prepare('SELECT id, slug, name, organization_id FROM workspaces WHERE slug = ?')
-      .get(workspaceSlug);
-  }
-
+  const workspace = result.rows[0];
   if (!workspace) {
     return null;
   }
 
-  // Check access based on API key type
   if (user.system_role !== 'super_admin') {
-    let hasAccess: boolean;
+    let hasAccess = true;
 
     if (user.scope_type === 'organization') {
-      // For organization-scoped API keys, check if workspace belongs to the organization
       hasAccess = user.organization_id === workspace.organization_id;
     } else {
-      // For user-scoped API keys, check if user has access to the workspace
-      if (dbType === 'postgres') {
-        const result = await adapter.query(
-          `SELECT 1 FROM user_workspaces WHERE user_id = $1 AND workspace_id = $2`,
-          [user.id, workspace.id]
-        );
-        hasAccess = result.rows.length > 0;
-      } else {
-        const db = getDb();
-        const row = db
-          .prepare(`SELECT 1 FROM user_workspaces WHERE user_id = ? AND workspace_id = ?`)
-          .get(user.id, workspace.id);
-        hasAccess = !!row;
-      }
+      const accessResult = await query(
+        `SELECT 1 FROM user_workspaces WHERE user_id = $1 AND workspace_id = $2`,
+        [user.id, workspace.id]
+      );
+      hasAccess = (accessResult.rowCount ?? 0) > 0;
     }
 
     if (!hasAccess) {
@@ -151,24 +132,12 @@ export async function resolveOrganization(
     return null;
   }
 
-  const adapter = getDbAdapter();
-  const dbType = getDbType();
+  const result = await query<{ id: number; name: string; slug: string }>(
+    'SELECT id, name, slug FROM organizations WHERE id = $1',
+    [user.organization_id]
+  );
 
-  let organization: any;
-  if (dbType === 'postgres') {
-    const result = await adapter.query(
-      'SELECT id, name, slug FROM organizations WHERE id = $1',
-      [user.organization_id]
-    );
-    organization = result.rows[0];
-  } else {
-    const db = getDb();
-    organization = db
-      .prepare('SELECT id, name, slug FROM organizations WHERE id = ?')
-      .get(user.organization_id);
-  }
-
-  return organization;
+  return result.rows[0] ?? null;
 }
 
 /**

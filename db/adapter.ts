@@ -41,9 +41,9 @@ export interface DbAdapter {
  * Unified statement interface
  */
 export interface StatementAdapter {
-  get<T = any>(params: any[]): T | undefined;
-  all<T = any>(params: any[]): T[];
-  run(params: any[]): { lastInsertRowid?: number | bigint; changes?: number };
+  get<T = any>(...params: any[]): T | undefined | Promise<T | undefined>;
+  all<T = any>(...params: any[]): T[] | Promise<T[]>;
+  run(...params: any[]): { lastInsertRowid?: number | bigint; changes?: number } | Promise<{ lastInsertRowid?: number | bigint; changes?: number }>;
 }
 
 /**
@@ -69,9 +69,9 @@ class SQLiteAdapter implements DbAdapter {
   prepare(sql: string): StatementAdapter {
     const stmt = this.db.prepare(sql);
     return {
-      get: <T = any>(params: any[]) => stmt.get(...params) as T | undefined,
-      all: <T = any>(params: any[]) => stmt.all(...params) as T[],
-      run: (params: any[]) => {
+      get: <T = any>(...params: any[]) => stmt.get(...params) as T | undefined,
+      all: <T = any>(...params: any[]) => stmt.all(...params) as T[],
+      run: (...params: any[]) => {
         const result = stmt.run(...params);
         return {
           lastInsertRowid: result.lastInsertRowid,
@@ -115,15 +115,15 @@ class PostgresAdapter implements DbAdapter {
 
   prepare(sql: string): StatementAdapter {
     return {
-      get: async <T = any>(params: any[]) => {
+      get: async <T = any>(...params: any[]) => {
         const result = await this.query<T>(sql, params);
         return result.rows[0];
       },
-      all: async <T = any>(params: any[]) => {
+      all: async <T = any>(...params: any[]) => {
         const result = await this.query<T>(sql, params);
         return result.rows;
       },
-      run: async (params: any[]) => {
+      run: async (...params: any[]) => {
         const result = this.client 
           ? await this.client.query(sql, params)
           : await pgQuery(sql, params);

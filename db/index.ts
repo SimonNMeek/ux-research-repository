@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
-import { getDbType, getDbAdapter } from './adapter';
+import { getDbType } from './adapter';
 
 const projectRoot = process.cwd();
 const dbDir = path.join(projectRoot, 'db');
@@ -33,12 +33,18 @@ function runMigrations(db: Database.Database) {
   }
 
   // Get all migration files
+  const dbType = getDbType();
   const migrationFiles = fs.readdirSync(migrationsDir)
     .filter(file => file.endsWith('.sql'))
     .sort(); // Ensure migrations run in order
 
   // Run pending migrations
   for (const filename of migrationFiles) {
+    // Skip Postgres-only migrations when running on SQLite
+    if (dbType === 'sqlite' && filename.includes('_postgres')) {
+      continue;
+    }
+
     if (!applied.has(filename)) {
       console.log(`Running migration: ${filename}`);
       const migrationPath = path.join(migrationsDir, filename);
