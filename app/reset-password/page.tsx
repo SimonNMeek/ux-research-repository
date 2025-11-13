@@ -122,10 +122,10 @@ function ResetPasswordForm() {
               {loading ? "Updating password…" : "Update password"}
             </Button>
             <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
-              <Link href="/login" className="hover:underline">
+              <Link href="/login" className="underline underline-offset-2">
                 Back to sign in
               </Link>
-              <Link href="/forgot-password" className="hover:underline">
+              <Link href="/forgot-password" className="underline underline-offset-2">
                 Request a new link
               </Link>
             </div>
