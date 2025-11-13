@@ -94,7 +94,7 @@ function ForgotPasswordForm() {
               >
                 Back to sign in
               </button>
-              <Link href="/signup" className="hover:underline">
+              <Link href="/signup" className="underline underline-offset-2">
                 Create an account
               </Link>
             </div>

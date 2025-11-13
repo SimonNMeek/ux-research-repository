@@ -76,6 +76,16 @@
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Accessibility: Underline all links by default */
+  a {
+    @apply underline underline-offset-2;
+  }
+  
+  /* Ensure Next.js Link components also get underlined */
+  a[href] {
+    @apply underline underline-offset-2;
+  }
 }
 
 @layer components {

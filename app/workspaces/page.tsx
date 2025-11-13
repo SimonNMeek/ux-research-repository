@@ -353,7 +353,7 @@ export default function WorkspacesPage() {
                                     e.stopPropagation();
                                     navigateToProject(workspace.slug, project.slug);
                                   }}
-                                  className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline text-left transition-colors"
+                                  className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline underline-offset-2 text-left transition-colors"
                                 >
                                   {project.name}
                                 </button>
