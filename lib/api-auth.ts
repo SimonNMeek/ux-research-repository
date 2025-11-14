@@ -72,59 +72,71 @@ export async function validateApiKey(key: string): Promise<ApiKeyUser | null> {
     return null;
   }
 
-  const result = await query<{
-    api_key_id: number;
-    key_hash: string;
-    user_id: number | null;
-    organization_id: number | null;
-    id: number | null;
-    email: string | null;
-    name: string | null;
-    system_role: string | null;
-  }>(
-    `SELECT ak.id as api_key_id, ak.key_hash, ak.user_id, ak.organization_id,
-            u.id, u.email, u.name, u.system_role
-     FROM api_keys ak
-     LEFT JOIN users u ON ak.user_id = u.id
-     WHERE ak.is_active = true
-       AND (ak.expires_at IS NULL OR ak.expires_at > CURRENT_TIMESTAMP)
-       AND (u.is_active = true OR u.is_active IS NULL)`
-  );
+  try {
+    // Fetch all active API keys (we need to compare hashes in memory since bcrypt
+    // doesn't support SQL comparison). However, we filter by active status and expiration
+    // to reduce the number of keys we need to check.
+    const result = await query<{
+      api_key_id: number;
+      key_hash: string;
+      user_id: number | null;
+      organization_id: number | null;
+      id: number | null;
+      email: string | null;
+      name: string | null;
+      system_role: string | null;
+    }>(
+      `SELECT ak.id as api_key_id, ak.key_hash, ak.user_id, ak.organization_id,
+              u.id, u.email, u.name, u.system_role
+       FROM api_keys ak
+       LEFT JOIN users u ON ak.user_id = u.id
+       WHERE ak.is_active = true
+         AND (ak.expires_at IS NULL OR ak.expires_at > CURRENT_TIMESTAMP)
+         AND (u.is_active = true OR u.is_active IS NULL)`
+    );
 
-  for (const apiKey of result.rows) {
-    if (!compareSync(key, apiKey.key_hash)) {
-      continue;
+    for (const apiKey of result.rows) {
+      // Compare the provided key against each stored hash
+      if (!compareSync(key, apiKey.key_hash)) {
+        continue;
+      }
+
+      // Update last_used_at asynchronously (don't wait for it)
+      query(`UPDATE api_keys SET last_used_at = CURRENT_TIMESTAMP WHERE id = $1`, [
+        apiKey.api_key_id,
+      ]).catch(err => console.error('Error updating api_key last_used_at:', err));
+
+      // Handle user-scoped API key
+      if (apiKey.user_id && apiKey.id && apiKey.email && apiKey.name) {
+        return {
+          id: apiKey.id,
+          email: apiKey.email,
+          name: apiKey.name,
+          system_role: apiKey.system_role || undefined,
+          api_key_id: apiKey.api_key_id,
+          scope_type: 'user',
+        };
+      }
+
+      // Handle organization-scoped API key
+      if (apiKey.organization_id) {
+        return {
+          id: 0,
+          email: `org-${apiKey.organization_id}@system`,
+          name: 'Organization API Key',
+          system_role: 'contributor',
+          api_key_id: apiKey.api_key_id,
+          organization_id: apiKey.organization_id,
+          scope_type: 'organization',
+        };
+      }
     }
 
-    await query(`UPDATE api_keys SET last_used_at = CURRENT_TIMESTAMP WHERE id = $1`, [
-      apiKey.api_key_id,
-    ]);
-
-    if (apiKey.user_id && apiKey.id && apiKey.email && apiKey.name) {
-      return {
-        id: apiKey.id,
-        email: apiKey.email,
-        name: apiKey.name,
-        system_role: apiKey.system_role || undefined,
-        api_key_id: apiKey.api_key_id,
-        scope_type: 'user',
-      };
-    }
-
-    if (apiKey.organization_id) {
-      return {
-        id: 0,
-        email: `org-${apiKey.organization_id}@system`,
-        name: 'Organization API Key',
-        system_role: 'contributor',
-        api_key_id: apiKey.api_key_id,
-        organization_id: apiKey.organization_id,
-        scope_type: 'organization',
-      };
-    }
+    return null;
+  } catch (error) {
+    console.error('Error validating API key:', error);
+    return null;
   }
-
-  return null;
 }
 
 export async function listApiKeys(userId: number): Promise<
@@ -207,15 +219,37 @@ export async function trackApiUsage(
   workspaceId?: number,
   organizationId?: number
 ): Promise<void> {
-  const today = new Date().toISOString().split('T')[0];
+  try {
+    const today = new Date().toISOString().split('T')[0];
 
-  await query(
-    `INSERT INTO api_key_usage (api_key_id, endpoint, workspace_id, organization_id, date, request_count)
-     VALUES ($1, $2, $3, $4, $5, 1)
-     ON CONFLICT (api_key_id, endpoint, date, workspace_id, organization_id)
-     DO UPDATE SET request_count = api_key_usage.request_count + 1`,
-    [apiKeyId, endpoint, workspaceId || null, organizationId || null, today]
-  );
+    // Check if usage record exists
+    const existing = await query(
+      `SELECT id, request_count FROM api_key_usage 
+       WHERE api_key_id = $1 AND endpoint = $2 AND date = $3 
+       AND (workspace_id = $4 OR (workspace_id IS NULL AND $4 IS NULL))
+       AND (organization_id = $5 OR (organization_id IS NULL AND $5 IS NULL))
+       LIMIT 1`,
+      [apiKeyId, endpoint, today, workspaceId || null, organizationId || null]
+    );
+
+    if (existing.rows.length > 0) {
+      // Update existing record
+      await query(
+        `UPDATE api_key_usage SET request_count = request_count + 1 WHERE id = $1`,
+        [existing.rows[0].id]
+      );
+    } else {
+      // Insert new record
+      await query(
+        `INSERT INTO api_key_usage (api_key_id, endpoint, workspace_id, organization_id, date, request_count)
+         VALUES ($1, $2, $3, $4, $5, 1)`,
+        [apiKeyId, endpoint, workspaceId || null, organizationId || null, today]
+      );
+    }
+  } catch (error) {
+    // Don't fail the request if tracking fails
+    console.error('Error tracking API usage:', error);
+  }
 }
 
 export async function deleteAllUserKeys(userId: number): Promise<void> {
