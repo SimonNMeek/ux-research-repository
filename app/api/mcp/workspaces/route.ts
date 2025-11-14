@@ -5,9 +5,12 @@ import { query } from '@/db/postgres';
 const handler = async (context: McpContext, request: NextRequest) => {
   const { user, organization } = context;
 
-  await trackMcpUsage(user, '/api/mcp/workspaces');
-
   try {
+    // Track usage (don't let tracking failures break the request)
+    trackMcpUsage(user, '/api/mcp/workspaces').catch(err => 
+      console.error('Error tracking MCP usage:', err)
+    );
+
     // Super admins see all workspaces
     if (user.system_role === 'super_admin') {
       const result = await query(
@@ -16,7 +19,7 @@ const handler = async (context: McpContext, request: NextRequest) => {
          LEFT JOIN organizations o ON w.organization_id = o.id
          ORDER BY w.name`
       );
-      return NextResponse.json({ workspaces: result.rows });
+      return NextResponse.json({ workspaces: result.rows || [] });
     }
 
     if (user.scope_type === 'organization') {
@@ -32,23 +35,27 @@ const handler = async (context: McpContext, request: NextRequest) => {
          ORDER BY w.name`,
         [user.organization_id]
       );
-      return NextResponse.json({ workspaces: result.rows });
+      return NextResponse.json({ workspaces: result.rows || [] });
     }
 
+    // User-scoped API keys - get workspaces through user_workspaces
     const result = await query(
       `SELECT w.id, w.slug, w.name, w.created_at, o.name as organization_name, uw.role
-         FROM workspaces w
-         INNER JOIN user_workspaces uw ON w.id = uw.workspace_id
-         LEFT JOIN organizations o ON w.organization_id = o.id
-        WHERE uw.user_id = $1
-        ORDER BY w.name`,
+       FROM workspaces w
+       INNER JOIN user_workspaces uw ON w.id = uw.workspace_id
+       LEFT JOIN organizations o ON w.organization_id = o.id
+       WHERE uw.user_id = $1
+       ORDER BY w.name`,
       [user.id]
     );
 
-    return NextResponse.json({ workspaces: result.rows });
+    return NextResponse.json({ workspaces: result.rows || [] });
   } catch (error: any) {
     console.error('Error fetching workspaces:', error);
-    return NextResponse.json({ error: 'Failed to fetch workspaces' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to fetch workspaces', message: error.message },
+      { status: 500 }
+    );
   }
 };
 
