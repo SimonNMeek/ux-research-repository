@@ -250,6 +250,7 @@ Before making system-level changes:
 - Check `CONTEXT-FOR-DEVELOPERS.md` (this file)
 - Check `SYSTEM-INSTRUCTIONS.md` for health check protocols
 - Check `INCIDENT-RCA.md` for common pitfalls
+- Check `docs/CLAUDE-WEB-REMOTE-MCP-SETUP.md` for Claude Web Remote MCP setup
 
 **Always verify**:
 - Current database type (check .env.local)
