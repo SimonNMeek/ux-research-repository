@@ -32,6 +32,8 @@ export async function POST(request: NextRequest) {
     // Route to the appropriate MCP endpoint
     let mcpEndpoint = '';
     let queryParams = new URLSearchParams();
+    let httpMethod = 'GET'; // Default to GET
+    let requestBody: any = null; // For POST/PUT requests
 
     console.log('Processing tool:', tool_name);
     
@@ -169,7 +171,13 @@ Ready to dive in? Let me know your role and what you'd like to achieve!`,
           );
         }
         mcpEndpoint = '/api/mcp/documents';
-        // This would be a POST request with body data
+        httpMethod = 'POST';
+        queryParams.set('workspace', parameters.workspace_slug); // Map workspace_slug to workspace query param
+        requestBody = {
+          title: parameters.title,
+          content: parameters.content,
+          project_slug: parameters.project_slug
+        };
         break;
 
       case 'update_document':
@@ -180,7 +188,11 @@ Ready to dive in? Let me know your role and what you'd like to achieve!`,
           );
         }
         mcpEndpoint = `/api/mcp/documents/${parameters.document_id}`;
-        // This would be a PUT request with body data
+        httpMethod = 'PUT';
+        requestBody = {
+          title: parameters.title,
+          content: parameters.content
+        };
         break;
 
       case 'set_user_preference':
@@ -213,21 +225,33 @@ Ready to dive in? Let me know your role and what you'd like to achieve!`,
         );
     }
 
-    // Get API key from request headers or use a default
-    const apiKey = request.headers.get('x-api-key') || 'sk-xd1mN9kYC5BcFn8YGu527FvXz9B515bNOZCQGSUV9pMa1ZW9';
+    // Get API key from request headers (should come from Authorization header via MCP server)
+    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
+    const apiKey = authHeader?.replace(/^Bearer /i, '') || request.headers.get('x-api-key') || 'sk-xd1mN9kYC5BcFn8YGu527FvXz9B515bNOZCQGSUV9pMa1ZW9';
 
     // Call the MCP endpoint
     const baseUrl = 'https://ux-repo-web.vercel.app';
-    const url = `${baseUrl}${mcpEndpoint}?${queryParams.toString()}`;
+    const queryString = queryParams.toString();
+    const url = queryString ? `${baseUrl}${mcpEndpoint}?${queryString}` : `${baseUrl}${mcpEndpoint}`;
     
-    console.log('Claude tool calling:', url);
+    console.log('Claude tool calling:', { method: httpMethod, url, hasBody: !!requestBody });
     
-    const response = await fetch(url, {
+    // Build fetch options
+    const fetchOptions: RequestInit = {
+      method: httpMethod,
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-    });
+    };
+    
+    // Add body for POST/PUT requests
+    if (requestBody && (httpMethod === 'POST' || httpMethod === 'PUT')) {
+      fetchOptions.body = JSON.stringify(requestBody);
+      console.log('Request body:', requestBody);
+    }
+    
+    const response = await fetch(url, fetchOptions);
 
     if (!response.ok) {
       const errorText = await response.text();

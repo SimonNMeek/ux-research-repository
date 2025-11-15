@@ -2,6 +2,8 @@
 
 Connect Sol to ChatGPT, Claude, Gemini, or any LLM using our REST API.
 
+**For Claude Web users**: See [Claude Web Remote MCP Setup Guide](./CLAUDE-WEB-REMOTE-MCP-SETUP.md) for the easiest integration!
+
 ## Quick Start
 
 ### 1. Generate an API Key
@@ -282,19 +284,36 @@ GPT: [Uses searchDocuments with workspace and query]
 
 ---
 
-### Claude Projects (Web)
+### Claude Web (Remote MCP)
 
-Claude doesn't support custom actions yet, but you can:
+✅ **Full Integration Available!** Connect Claude Web directly to Sol Research using Remote MCP.
 
-1. Create a **Claude Project**
-2. Add this to your custom instructions:
+**Setup Guide**: See [Claude Web Remote MCP Setup Guide](./CLAUDE-WEB-REMOTE-MCP-SETUP.md) for complete instructions.
 
+**Quick Start**:
+1. Get your Sol Research API key (see "Generate an API Key" above)
+2. In Claude Web, go to Settings → Remote MCP → Add custom connector
+3. Enter:
+   - **Name**: "Sol Research"
+   - **Remote MCP server URL**: `https://sol-research-mcp.fly.dev/?api_key=sk-YOUR_API_KEY`
+4. Click "Add"
+
+**Once connected, Claude can**:
+- List your workspaces and projects
+- Search across your research documents
+- Read and create documents
+- Access all 10 Sol Research tools
+
+**Example Usage**:
 ```
-I have access to a UX research database at Sol. When I need to search research:
-- I'll ask the user to run: curl -H "Authorization: Bearer YOUR_KEY" "https://ux-repo-web.vercel.app/api/mcp/search?workspace=WORKSPACE&q=QUERY"
-- The user will paste the results
-- I'll analyze and summarize them
+You: "List all my workspaces"
+Claude: [Uses list_workspaces tool and shows results]
+
+You: "Search for user feedback about checkout in Farm to Fork"
+Claude: [Uses search tool and summarizes findings]
 ```
+
+For detailed setup and troubleshooting, see [Claude Web Remote MCP Setup Guide](./CLAUDE-WEB-REMOTE-MCP-SETUP.md).
 
 ---
 
