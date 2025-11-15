@@ -160,22 +160,21 @@ const handler = async (context: McpContext, request: NextRequest) => {
       }
 
       // Create document
-      const contentPreview = content ? content.substring(0, 500) : '';
-      
+      // Note: The documents table uses 'body' column, not 'content'
       let documentId: number;
       if (dbType === 'postgres') {
         const result = await adapter.query(`
-          INSERT INTO documents (project_id, title, content, content_preview, created_by)
-          VALUES ($1, $2, $3, $4, $5)
+          INSERT INTO documents (project_id, title, body)
+          VALUES ($1, $2, $3)
           RETURNING id
-        `, [project.id, title, content || '', contentPreview, user.id]);
+        `, [project.id, title, content || '']);
         documentId = result.rows[0].id;
       } else {
         const db = getDb();
         const result = db.prepare(`
-          INSERT INTO documents (project_id, title, content, content_preview, created_by)
-          VALUES (?, ?, ?, ?, ?)
-        `).run(project.id, title, content || '', contentPreview, user.id);
+          INSERT INTO documents (project_id, title, body)
+          VALUES (?, ?, ?)
+        `).run(project.id, title, content || '');
         documentId = result.lastInsertRowid as number;
       }
 
