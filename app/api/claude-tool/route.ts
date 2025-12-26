@@ -140,11 +140,15 @@ Ready to dive in? Let me know your role and what you'd like to achieve!`,
             { status: 400 }
           );
         }
+        if (!parameters.workspace_slug) {
+          return NextResponse.json(
+            { error: 'workspace_slug parameter required' },
+            { status: 400 }
+          );
+        }
         mcpEndpoint = '/api/mcp/search';
         queryParams.set('q', parameters.query); // Search endpoint expects 'q' parameter
-        if (parameters.workspace_slug) {
-          queryParams.set('workspace', parameters.workspace_slug);
-        }
+        queryParams.set('workspace', parameters.workspace_slug); // Map workspace_slug to workspace query param
         if (parameters.project_slug) {
           queryParams.set('project', parameters.project_slug);
         }
@@ -160,7 +164,15 @@ Ready to dive in? Let me know your role and what you'd like to achieve!`,
             { status: 400 }
           );
         }
-        mcpEndpoint = `/api/mcp/documents/${parameters.document_id}`;
+        if (!parameters.workspace_slug) {
+          return NextResponse.json(
+            { error: 'workspace_slug parameter required' },
+            { status: 400 }
+          );
+        }
+        mcpEndpoint = '/api/mcp/documents';
+        queryParams.set('id', parameters.document_id.toString());
+        queryParams.set('workspace', parameters.workspace_slug); // Map workspace_slug to workspace query param
         break;
 
       case 'create_document':
