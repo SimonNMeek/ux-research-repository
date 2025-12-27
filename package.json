@@ -37,7 +37,7 @@
     "lucide-react": "^0.544.0",
     "micromark": "^4.0.2",
     "nanoid": "^5.1.6",
-    "next": "15.5.4",
+    "next": "^15.5.7",
     "openai": "^6.7.0",
     "papaparse": "^5.5.3",
     "pg": "^8.16.3",
