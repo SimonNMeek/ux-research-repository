@@ -110,12 +110,8 @@ export async function POST(req: NextRequest) {
                     type: 'integer',
                     description: 'Document ID',
                   },
-                  workspace_slug: {
-                    type: 'string',
-                    description: 'Workspace slug',
-                  },
                 },
-                required: ['document_id', 'workspace_slug'],
+                required: ['document_id'],
               },
             },
             {
