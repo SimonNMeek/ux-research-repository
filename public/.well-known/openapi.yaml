@@ -1,0 +1,207 @@
+openapi: 3.1.0
+info:
+  title: Sol Research MCP API
+  version: "1.0.0"
+  description: |
+    REST API for Sol Research MCP endpoints. Use Bearer token authentication.
+    All endpoints are read-only for this Action.
+servers:
+  - url: https://ux-repo-web.vercel.app
+paths:
+  /api/mcp/workspaces:
+    get:
+      operationId: listWorkspaces
+      summary: List workspaces available to the API key
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspaces:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        slug: { type: string }
+                        name: { type: string }
+                        created_at: { type: string }
+                        organization_name: { type: string }
+  /api/mcp/projects:
+    get:
+      operationId: listProjects
+      summary: List projects in a workspace
+      parameters:
+        - in: query
+          name: workspace
+          required: true
+          schema:
+            type: string
+          description: Workspace slug
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  projects:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        slug: { type: string }
+                        name: { type: string }
+                        description: { type: string }
+                        document_count: { type: integer }
+                        created_at: { type: string }
+                  workspace:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      slug: { type: string }
+                      name: { type: string }
+                      created_at: { type: string }
+                      organization_name: { type: string }
+              examples:
+                sample:
+                  value:
+                    projects:
+                      - id: 1
+                        slug: user-research
+                        name: User Research
+                        description: Interviews, surveys etc
+                        document_count: 3
+                        created_at: '2025-10-12T20:45:03.779Z'
+                    workspace:
+                      id: 5
+                      slug: farm-to-fork
+                      name: Farm to Fork
+                      created_at: '2025-10-12T20:36:35.128Z'
+                      organization_name: SOL Demo Organization
+  /api/mcp/documents:
+    get:
+      operationId: listDocuments
+      summary: List documents in a project
+      parameters:
+        - in: query
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: project
+          required: true
+          schema:
+            type: string
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documents:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        title: { type: string }
+                        body: { type: string }
+                        is_favorite: { type: boolean }
+                        created_at: { type: string }
+                  project:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      slug: { type: string }
+                      name: { type: string }
+                      description: { type: string }
+                      created_at: { type: string }
+              examples:
+                sample:
+                  value:
+                    documents:
+                      - id: 7
+                        title: checkout_interview1.txt
+                        body: |
+                          (truncated) Farm to Fork – User Interviews…
+                        is_favorite: false
+                        created_at: '2025-10-12T21:12:28.139Z'
+                      - id: 5
+                        title: checkout_interview2.txt
+                        body: |
+                          (truncated) Persona 2 – Young Professional…
+                        is_favorite: false
+                        created_at: '2025-10-12T21:06:51.636Z'
+                      - id: 4
+                        title: checkout_interview3.md
+                        body: |
+                          (truncated) Persona 3 – Retired Couple…
+                        is_favorite: false
+                        created_at: '2025-10-12T20:57:12.777Z'
+                    project:
+                      id: 1
+                      slug: user-research
+                      name: User Research
+                      description: Interviews, surveys etc
+                      created_at: '2025-10-12T20:45:03.779Z'
+  /api/mcp/search:
+    get:
+      operationId: searchDocuments
+      summary: Search across workspace documents
+      parameters:
+        - in: query
+          name: workspace
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: query
+          required: true
+          schema:
+            type: string
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        document_id: { type: integer }
+                        project_slug: { type: string }
+                        title: { type: string }
+                        snippet: { type: string }
+                        created_at: { type: string }
+                        is_favorite: { type: boolean }
+                  workspace_slug: { type: string }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas: {}
+
+
