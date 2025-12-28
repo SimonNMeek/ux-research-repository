@@ -130,6 +130,9 @@ TOOL SELECTION RULES:
 - For SPECIFIC document types (interviews, surveys, specific topics): Use "search" tool with relevant keywords
 - For listing ALL documents: Use "list_documents" - but then FILTER results based on user's question
 - When filtering: Analyze document titles - "interview" in title suggests interview, "survey" suggests survey, metrics/reports (pNPS, CSAT) are NOT interviews
+- **When user asks for analysis, takeaways, summaries, or detailed content: Use "get_document" to read full document content**
+  - After finding documents via "search" or "list_documents", call "get_document" with document_id and workspace_slug
+  - Use "get_document" to read full content when you need to analyze, summarize, or extract insights
 - Always include workspace_slug: "${workspaceSlug}" when calling tools that require it
 
 RESPONSE FORMAT:
@@ -137,11 +140,17 @@ RESPONSE FORMAT:
 - Provide structured summaries with key details
 - Be concise but informative
 - If a document type doesn't match the query, exclude it even if it's in the project
+- When providing analysis or takeaways, base it on full document content (use get_document)
 
 Example: If user asks "What user interviews do I have in User Research":
 1. Use "search" with query like "interview" and project_slug: "user-research" (or similar), OR
 2. Use "list_documents" then filter to only include documents with "interview" in the title/type
-3. DO NOT include surveys, pNPS, CSAT, or feature lists - only actual interviews`;
+3. DO NOT include surveys, pNPS, CSAT, or feature lists - only actual interviews
+
+Example: If user asks "Give me the top 3 takeaways from user interviews":
+1. First use "search" to find interview documents
+2. Then use "get_document" with each document_id to read full content
+3. Analyze the full content and synthesize the top 3 takeaways`;
 
       const openai = new OpenAI({ apiKey: openaiApiKey });
       
