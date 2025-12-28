@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 import { compareSync, hashSync } from 'bcryptjs';
-import { query } from '@/db/postgres';
+import { query } from '@/lib/db-query';
 
 export type User = {
   id: number;
