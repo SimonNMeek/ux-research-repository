@@ -1,22 +1,22 @@
-openapi: 3.1.0
+openapi: 3.0.0
 info:
-  title: Sol Research MCP API
-  version: "1.0.0"
-  description: |
-    REST API for Sol Research MCP endpoints. Use Bearer token authentication.
-    All endpoints are read-only for this Action.
+  title: Sol Research API
+  version: 1.0.0
+  description: API for querying workspaces, projects, documents and performing search within the Sol Research multi-tenant repository.
 servers:
-  - url: https://ux-repo-web.vercel.app
+  - url: https://ux-repo-web.vercel.app/api/mcp
+    description: Production server
 paths:
-  /api/mcp/workspaces:
+  /workspaces:
     get:
       operationId: listWorkspaces
-      summary: List workspaces available to the API key
+      summary: List all available workspaces
+      description: Returns a list of all workspaces in the Sol Research repository
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: OK
+          description: List of workspaces
           content:
             application/json:
               schema:
@@ -27,27 +27,33 @@ paths:
                     items:
                       type: object
                       properties:
-                        id: { type: integer }
-                        slug: { type: string }
-                        name: { type: string }
-                        created_at: { type: string }
-                        organization_name: { type: string }
-  /api/mcp/projects:
+                        id:
+                          type: integer
+                        slug:
+                          type: string
+                        name:
+                          type: string
+                        created_at:
+                          type: string
+        '401':
+          description: Unauthorized
+  /projects:
     get:
       operationId: listProjects
       summary: List projects in a workspace
-      parameters:
-        - in: query
-          name: workspace
-          required: true
-          schema:
-            type: string
-          description: Workspace slug
+      description: Returns all projects within the specified workspace
       security:
         - bearerAuth: []
+      parameters:
+        - name: workspace
+          in: query
+          required: true
+          description: Workspace slug
+          schema:
+            type: string
       responses:
         '200':
-          description: OK
+          description: List of projects
           content:
             application/json:
               schema:
@@ -58,127 +64,209 @@ paths:
                     items:
                       type: object
                       properties:
-                        id: { type: integer }
-                        slug: { type: string }
-                        name: { type: string }
-                        description: { type: string }
-                        document_count: { type: integer }
-                        created_at: { type: string }
-                  workspace:
-                    type: object
-                    properties:
-                      id: { type: integer }
-                      slug: { type: string }
-                      name: { type: string }
-                      created_at: { type: string }
-                      organization_name: { type: string }
-              examples:
-                sample:
-                  value:
-                    projects:
-                      - id: 1
-                        slug: user-research
-                        name: User Research
-                        description: Interviews, surveys etc
-                        document_count: 3
-                        created_at: '2025-10-12T20:45:03.779Z'
-                    workspace:
-                      id: 5
-                      slug: farm-to-fork
-                      name: Farm to Fork
-                      created_at: '2025-10-12T20:36:35.128Z'
-                      organization_name: SOL Demo Organization
-  /api/mcp/documents:
+                        id:
+                          type: integer
+                        slug:
+                          type: string
+                        name:
+                          type: string
+                        description:
+                          type: string
+        '401':
+          description: Unauthorized
+  /documents:
     get:
-      operationId: listDocuments
-      summary: List documents in a project
-      parameters:
-        - in: query
-          name: workspace
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: project
-          required: true
-          schema:
-            type: string
+      operationId: getDocument
+      summary: Get document(s) - list metadata or retrieve full content
+      description: |
+        **Two modes:**
+        
+        1. **List documents** (without `id`): Returns metadata only (no body content)
+        2. **Get full document** (with `id`): Returns COMPLETE document with full body content (100% of file, not snippets)
+        
+        **When to use with `id` parameter:**
+        - Reading entire interview transcripts
+        - Comprehensive document analysis
+        - Theme extraction across full documents
+        - Synthesizing insights from complete content
+        
+        Extract document IDs from listDocuments or searchDocuments results, then call this operation with the `id` parameter to get the full document body.
       security:
         - bearerAuth: []
+      parameters:
+        - name: workspace
+          in: query
+          required: true
+          description: Workspace slug
+          schema:
+            type: string
+        - name: id
+          in: query
+          required: false
+          description: Document ID. When provided, returns COMPLETE document with full body (100% of file). When omitted, returns list of documents (metadata only).
+          schema:
+            type: integer
+        - name: project
+          in: query
+          required: false
+          description: Project slug to filter documents (only used when listing, not when getting by id)
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of documents to return (only used when listing, not when getting by id)
+          schema:
+            type: integer
+            default: 20
       responses:
         '200':
-          description: OK
+          description: Document list (when id omitted) or full document content (when id provided)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    description: Response when listing documents (id parameter omitted)
+                    properties:
+                      documents:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                              description: Document ID - use this value with id parameter to get full content
+                            title:
+                              type: string
+                            is_favorite:
+                              type: boolean
+                            created_at:
+                              type: string
+                            project_slug:
+                              type: string
+                            project_name:
+                              type: string
+                      project:
+                        type: object
+                        nullable: true
+                  - type: object
+                    description: Response when getting full document (id parameter provided)
+                    properties:
+                      document:
+                        type: object
+                        description: Complete document with full body content (100% of file, not snippets)
+                        properties:
+                          id:
+                            type: integer
+                          title:
+                            type: string
+                          body:
+                            type: string
+                            description: Complete document content (100% of file, not snippets)
+                          clean_text:
+                            type: string
+                            nullable: true
+                          original_text:
+                            type: string
+                            nullable: true
+                          project_slug:
+                            type: string
+                          project_name:
+                            type: string
+                          created_at:
+                            type: string
+        '401':
+          description: Unauthorized
+        '404':
+          description: Document not found (when id provided)
+    post:
+      operationId: createDocument
+      summary: Create a new document
+      description: Creates a new document in the specified project
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: workspace
+          in: query
+          required: true
+          description: Workspace slug
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - project_slug
+              properties:
+                title:
+                  type: string
+                content:
+                  type: string
+                  description: Document body content
+                project_slug:
+                  type: string
+      responses:
+        '201':
+          description: Document created successfully
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  documents:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id: { type: integer }
-                        title: { type: string }
-                        body: { type: string }
-                        is_favorite: { type: boolean }
-                        created_at: { type: string }
-                  project:
+                  message:
+                    type: string
+                  document:
                     type: object
                     properties:
-                      id: { type: integer }
-                      slug: { type: string }
-                      name: { type: string }
-                      description: { type: string }
-                      created_at: { type: string }
-              examples:
-                sample:
-                  value:
-                    documents:
-                      - id: 7
-                        title: checkout_interview1.txt
-                        body: |
-                          (truncated) Farm to Fork – User Interviews…
-                        is_favorite: false
-                        created_at: '2025-10-12T21:12:28.139Z'
-                      - id: 5
-                        title: checkout_interview2.txt
-                        body: |
-                          (truncated) Persona 2 – Young Professional…
-                        is_favorite: false
-                        created_at: '2025-10-12T21:06:51.636Z'
-                      - id: 4
-                        title: checkout_interview3.md
-                        body: |
-                          (truncated) Persona 3 – Retired Couple…
-                        is_favorite: false
-                        created_at: '2025-10-12T20:57:12.777Z'
-                    project:
-                      id: 1
-                      slug: user-research
-                      name: User Research
-                      description: Interviews, surveys etc
-                      created_at: '2025-10-12T20:45:03.779Z'
-  /api/mcp/search:
+                      id:
+                        type: integer
+                      title:
+                        type: string
+                      project_slug:
+                        type: string
+        '401':
+          description: Unauthorized
+  /search:
     get:
       operationId: searchDocuments
-      summary: Search across workspace documents
-      parameters:
-        - in: query
-          name: workspace
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: query
-          required: true
-          schema:
-            type: string
+      summary: Search across documents
+      description: Performs full-text search across documents in a workspace or project. Returns snippets/previews, not full document content. Use getDocument operation with the document ID to retrieve complete document body.
       security:
         - bearerAuth: []
+      parameters:
+        - name: workspace
+          in: query
+          required: true
+          description: Workspace slug
+          schema:
+            type: string
+        - name: q
+          in: query
+          required: false
+          description: Search query. If empty, returns recent documents.
+          schema:
+            type: string
+        - name: project
+          in: query
+          required: false
+          description: Project slug to limit search
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results
+          schema:
+            type: integer
+            default: 20
       responses:
         '200':
-          description: OK
+          description: Search results
           content:
             application/json:
               schema:
@@ -189,19 +277,41 @@ paths:
                     items:
                       type: object
                       properties:
-                        document_id: { type: integer }
-                        project_slug: { type: string }
-                        title: { type: string }
-                        snippet: { type: string }
-                        created_at: { type: string }
-                        is_favorite: { type: boolean }
-                  workspace_slug: { type: string }
+                        id:
+                          type: integer
+                          description: Document ID - use this with getDocument operation (with id parameter) to retrieve full content
+                        title:
+                          type: string
+                        content_preview:
+                          type: string
+                          description: Preview snippet (first 200 chars), not full content. Use getDocument for complete content.
+                        project_slug:
+                          type: string
+                        project_name:
+                          type: string
+                        created_at:
+                          type: string
+                        rank:
+                          type: number
+                          description: Search relevance score
+                  query:
+                    type: string
+                  count:
+                    type: integer
+                  workspace:
+                    type: object
+                    properties:
+                      slug:
+                        type: string
+                      name:
+                        type: string
+        '401':
+          description: Unauthorized
+
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-  schemas: {}
-
-
+      description: Use your Sol Research API key. Format: Bearer sk-...
