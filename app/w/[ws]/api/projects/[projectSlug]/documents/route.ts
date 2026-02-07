@@ -33,13 +33,16 @@ const handler: WorkspaceRouteHandler = async (context, req, routeParams) => {
       const documents = await documentRepo.list(project.id, { limit, offset });
       
       // Get tags for each document
-      const documentsWithTags = await Promise.all(documents.map(async doc => ({
-        ...doc,
-        tags: (await tagRepo.getForDocument(doc.id)).map(tag => ({
-          id: tag.id,
-          name: tag.name
-        }))
-      })));
+      const documentsWithTags = await Promise.all(documents.map(async doc => {
+        const { body, original_text, clean_text, ...docWithoutBody } = doc;
+        return {
+          ...docWithoutBody,
+          tags: (await tagRepo.getForDocument(doc.id)).map(tag => ({
+            id: tag.id,
+            name: tag.name
+          }))
+        };
+      }));
 
       return new Response(
         JSON.stringify({ 
