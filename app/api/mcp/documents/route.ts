@@ -58,7 +58,7 @@ const handler = async (context: McpContext, request: NextRequest) => {
         let documents: any[];
         if (dbType === 'postgres') {
           const result = await adapter.query(`
-            SELECT d.id, d.title, d.body, d.is_favorite, d.created_at,
+            SELECT d.id, d.title, d.is_favorite, d.created_at,
                    p.slug as project_slug, p.name as project_name
             FROM documents d
             INNER JOIN projects p ON d.project_id = p.id
@@ -71,7 +71,7 @@ const handler = async (context: McpContext, request: NextRequest) => {
         } else {
           const db = getDb();
           documents = db.prepare(`
-            SELECT d.id, d.title, d.body, d.is_favorite, d.created_at,
+            SELECT d.id, d.title, d.is_favorite, d.created_at,
                    p.slug as project_slug, p.name as project_name
             FROM documents d
             INNER JOIN projects p ON d.project_id = p.id
@@ -104,7 +104,6 @@ const handler = async (context: McpContext, request: NextRequest) => {
           documents: documents.map(doc => ({
             id: doc.id,
             title: doc.title,
-            body: doc.body,
             is_favorite: Boolean(doc.is_favorite),
             created_at: doc.created_at
           })),
