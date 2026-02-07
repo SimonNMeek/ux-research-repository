@@ -130,9 +130,11 @@ TOOL SELECTION RULES:
 - For SPECIFIC document types (interviews, surveys, specific topics): Use "search" tool with relevant keywords
 - For listing ALL documents: Use "list_documents" - but then FILTER results based on user's question
 - When filtering: Analyze document titles - "interview" in title suggests interview, "survey" suggests survey, metrics/reports (pNPS, CSAT) are NOT interviews
-- **When user asks for analysis, takeaways, summaries, or detailed content: Use "get_document" to read full document content**
-  - After finding documents via "search" or "list_documents", call "get_document" with document_id and workspace_slug
-  - Use "get_document" to read full content when you need to analyze, summarize, or extract insights
+- **CRITICAL: When user asks for analysis, takeaways, summaries, or detailed content: ALWAYS use "get_document" to read the COMPLETE document**
+  - "get_document" returns 100% of the document content (not snippets) - use this for full analysis
+  - After finding documents via "search" or "list_documents", extract the document_id from results
+  - Call "get_document" with document_id and workspace_slug to get the full document body
+  - DO NOT rely on search snippets for comprehensive analysis - always fetch full documents
 - Always include workspace_slug: "${workspaceSlug}" when calling tools that require it
 
 RESPONSE FORMAT:

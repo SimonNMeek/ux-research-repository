@@ -102,13 +102,13 @@ export async function POST(req: NextRequest) {
             },
             {
               name: 'get_document',
-              description: 'Get the full content of a specific research document by ID',
+              description: 'Get the COMPLETE, FULL document content (100% of the file, not snippets) by document ID. Use this when you need to read entire interview transcripts, analyze complete documents, extract themes, or synthesize insights. Returns the entire document body - use this instead of relying on search snippets when you need comprehensive analysis.',
               inputSchema: {
                 type: 'object',
                 properties: {
                   document_id: {
                     type: 'integer',
-                    description: 'Document ID',
+                    description: 'Document ID (obtain from list_documents or search results)',
                   },
                   workspace_slug: {
                     type: 'string',
