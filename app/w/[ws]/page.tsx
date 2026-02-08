@@ -238,15 +238,21 @@ export default function WorkspaceDashboard() {
       });
       
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({ error: 'Failed to rename workspace' }));
+        console.error('Workspace rename error:', errorData);
         throw new Error(errorData.error || 'Failed to rename workspace');
       }
       
-      // Update local state
-      setWorkspace({ ...workspace, name: newName.trim() });
+      const result = await response.json();
+      console.log('Workspace rename success:', result);
+      
+      // Update local state with the response data
+      const updatedName = result.name || newName.trim();
+      setWorkspace({ ...workspace, name: updatedName });
       setRenamingWorkspace({ open: false, currentName: '', newName: '' });
     } catch (err: any) {
-      alert(err.message);
+      console.error('Workspace rename failed:', err);
+      alert(err.message || 'Failed to rename workspace');
     }
   }, [workspaceSlug, workspace]);
 

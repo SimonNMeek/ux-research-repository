@@ -55,7 +55,8 @@ const handler: WorkspaceRouteHandler = async (context, req) => {
         JSON.stringify({ 
           id: updatedWorkspace.id,
           slug: updatedWorkspace.slug,
-          name: updatedWorkspace.name
+          name: updatedWorkspace.name,
+          success: true
         }),
         { status: 200, headers: { 'content-type': 'application/json' } }
       );
