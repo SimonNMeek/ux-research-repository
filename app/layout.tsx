@@ -16,9 +16,9 @@ export const metadata: Metadata = {
   title: "Sol Research",
   description: "Sol Research demo",
   icons: {
-    icon: [
-      { url: '/icon.svg', type: 'image/svg+xml' },
-    ],
+    icon: '/icon.svg',
+    shortcut: '/icon.svg',
+    apple: '/icon.svg',
   },
 };
 
