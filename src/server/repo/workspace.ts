@@ -89,7 +89,7 @@ export class WorkspaceRepo {
     values.push(id);
     const result = await query<Workspace>(
       `UPDATE workspaces
-       SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP
+       SET ${updates.join(', ')}
        WHERE id = $${values.length}
        RETURNING *`,
       values

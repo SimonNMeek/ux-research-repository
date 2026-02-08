@@ -121,7 +121,7 @@ export class ProjectRepo {
     values.push(id);
     const result = await query<Project>(
       `UPDATE projects
-       SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP
+       SET ${updates.join(', ')}
        WHERE id = $${values.length}
        RETURNING *`,
       values
