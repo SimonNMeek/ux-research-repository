@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Plus, Heart, Search, FolderOpen, Calendar, Star, Filter, Eye, Loader2, Sparkles } from 'lucide-react';
+import { Plus, Heart, Search, FolderOpen, Calendar, Star, Filter, Eye, Loader2, Sparkles, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -106,6 +106,13 @@ export default function WorkspaceDashboard() {
     project: null 
   });
   const [deleting, setDeleting] = useState(false);
+
+  // Workspace rename state
+  const [renamingWorkspace, setRenamingWorkspace] = useState<{ open: boolean; currentName: string; newName: string }>({
+    open: false,
+    currentName: '',
+    newName: ''
+  });
 
   // Search state
   const [query, setQuery] = useState('');
@@ -218,6 +225,30 @@ export default function WorkspaceDashboard() {
 
     loadWorkspaceData();
   }, [workspaceSlug]);
+
+  // Workspace rename function
+  const renameWorkspace = useCallback(async (newName: string) => {
+    if (!newName.trim() || !workspace) return;
+    
+    try {
+      const response = await fetch(`/w/${workspaceSlug}/api/workspace`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName.trim() })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to rename workspace');
+      }
+      
+      // Update local state
+      setWorkspace({ ...workspace, name: newName.trim() });
+      setRenamingWorkspace({ open: false, currentName: '', newName: '' });
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }, [workspaceSlug, workspace]);
 
   // Perform search
   const performSearch = useCallback(async (searchQuery: string) => {
@@ -424,7 +455,20 @@ export default function WorkspaceDashboard() {
           <div className="mb-8">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-4xl font-bold mb-2">{workspace.name}</h1>
+                <div className="flex items-center gap-2 mb-2">
+                  <h1 className="text-4xl font-bold">{workspace.name}</h1>
+                  {workspaceContext && (workspaceContext.workspaceRole === 'owner' || workspaceContext.workspaceRole === 'admin') && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setRenamingWorkspace({ open: true, currentName: workspace.name, newName: workspace.name })}
+                      className="h-8 w-8 p-0"
+                      title="Rename workspace"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
                 <p className="text-gray-600">
                   {projects.length} {projects.length === 1 ? 'project' : 'projects'} • {favoriteDocuments.length} favourite documents
                 </p>
@@ -840,6 +884,54 @@ export default function WorkspaceDashboard() {
                   ) : (
                     'Delete Project'
                   )}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Workspace Rename Modal */}
+        <Dialog open={renamingWorkspace.open} onOpenChange={(open) => !open && setRenamingWorkspace({ open: false, currentName: '', newName: '' })}>
+          <DialogContent className="sm:max-w-[425px] bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+            <DialogHeader>
+              <DialogTitle>Rename Workspace</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="current-workspace-name" className="text-sm font-medium text-gray-700 dark:text-gray-300">Current name</Label>
+                <p className="mt-1 text-gray-600">{renamingWorkspace.currentName}</p>
+              </div>
+              <div>
+                <Label htmlFor="new-workspace-name" className="text-sm font-medium text-gray-700 dark:text-gray-300">New name</Label>
+                <Input
+                  id="new-workspace-name"
+                  value={renamingWorkspace.newName}
+                  onChange={(e) => setRenamingWorkspace(prev => ({ ...prev, newName: e.target.value }))}
+                  placeholder="Enter new workspace name..."
+                  className="mt-1 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && renamingWorkspace.newName.trim()) {
+                      renameWorkspace(renamingWorkspace.newName);
+                    }
+                  }}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-4">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setRenamingWorkspace({ open: false, currentName: '', newName: '' })}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={() => {
+                    if (renamingWorkspace.newName.trim()) {
+                      renameWorkspace(renamingWorkspace.newName);
+                    }
+                  }}
+                  disabled={!renamingWorkspace.newName.trim()}
+                >
+                  Rename
                 </Button>
               </div>
             </div>
