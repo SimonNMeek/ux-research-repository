@@ -231,19 +231,32 @@ export default function WorkspaceDashboard() {
     if (!newName.trim() || !workspace) return;
     
     try {
+      console.log('Attempting to rename workspace:', { workspaceSlug, currentName: workspace.name, newName: newName.trim() });
+      
       const response = await fetch(`/w/${workspaceSlug}/api/workspace`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newName.trim() })
       });
       
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to rename workspace' }));
-        console.error('Workspace rename error:', errorData);
-        throw new Error(errorData.error || 'Failed to rename workspace');
+      console.log('Workspace rename response status:', response.status, response.statusText);
+      
+      const responseText = await response.text();
+      console.log('Workspace rename response body:', responseText);
+      
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Failed to parse response as JSON:', parseError);
+        throw new Error(`Invalid response from server: ${responseText.substring(0, 100)}`);
       }
       
-      const result = await response.json();
+      if (!response.ok) {
+        console.error('Workspace rename error:', result);
+        throw new Error(result.error || `Server returned ${response.status}: ${response.statusText}`);
+      }
+      
       console.log('Workspace rename success:', result);
       
       // Update local state with the response data
