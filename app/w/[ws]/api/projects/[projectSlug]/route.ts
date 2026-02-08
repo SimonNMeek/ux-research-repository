@@ -27,6 +27,8 @@ const handler: WorkspaceRouteHandler = async (context, req, routeParams) => {
       const body = await req.json();
       const { name } = body;
 
+      console.log('Project rename request:', { workspaceId: workspace.id, projectSlug, newName: name });
+
       if (!name || typeof name !== 'string' || !name.trim()) {
         return new Response(
           JSON.stringify({ error: 'name is required' }),
@@ -37,30 +39,45 @@ const handler: WorkspaceRouteHandler = async (context, req, routeParams) => {
       // Get the project to ensure it exists and belongs to this workspace
       const project = await projectRepo.getBySlug(workspace.id, projectSlug);
       if (!project) {
+        console.error('Project not found:', { workspaceId: workspace.id, projectSlug });
         return new Response(
           JSON.stringify({ error: 'Project not found' }),
           { status: 404, headers: { 'content-type': 'application/json' } }
         );
       }
 
+      console.log('Found project:', { id: project.id, currentName: project.name });
+
       // Update the project name
       const updatedProject = await projectRepo.update(project.id, { name: name.trim() });
       
       if (!updatedProject) {
+        console.error('Project update returned null:', { projectId: project.id, newName: name.trim() });
         return new Response(
-          JSON.stringify({ error: 'Failed to update project' }),
+          JSON.stringify({ error: 'Failed to update project - update returned null' }),
           { status: 500, headers: { 'content-type': 'application/json' } }
         );
       }
+
+      console.log('Project updated successfully:', { id: updatedProject.id, newName: updatedProject.name });
 
       return new Response(
         JSON.stringify({ project: updatedProject }),
         { status: 200, headers: { 'content-type': 'application/json' } }
       );
     } catch (error: any) {
-      console.error('Error renaming project:', error);
+      console.error('Error renaming project:', {
+        error: error,
+        message: error?.message,
+        stack: error?.stack,
+        code: error?.code,
+        detail: error?.detail
+      });
       return new Response(
-        JSON.stringify({ error: error.message || 'Failed to rename project' }),
+        JSON.stringify({ 
+          error: error?.message || 'Failed to rename project',
+          details: process.env.NODE_ENV === 'development' ? error?.stack : undefined
+        }),
         { status: 500, headers: { 'content-type': 'application/json' } }
       );
     }
